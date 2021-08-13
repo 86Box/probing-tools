@@ -8,8 +8,8 @@ Usage
 PCIREG -s [-d]
 ∟ Display all devices on the PCI bus. Specify -d to dump registers as well.
 
-PCIREG -i
-∟ Display BIOS IRQ steering table.
+PCIREG -i [-8]
+∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.
 
 PCIREG -r [bus] device [function] register
 ∟ Read the given register
@@ -29,4 +29,4 @@ Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.
 Building
 --------
 * **Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
-* **Linux:** Run `./build.sh` with OpenWatcom on `$PATH`.
+* **Linux:** Run `./build.sh` with OpenWatcom tools present in `$PATH`.

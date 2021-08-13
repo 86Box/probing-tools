@@ -1,0 +1,12 @@
+# cp437 tool
+cp437/cp437
+cp437/cp437.exe
+*.cp437
+
+# Watcom C
+*.err
+*.obj
+
+# Python
+__pycache__
+*.pyc

@@ -28,5 +28,5 @@ Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.
 
 Building
 --------
-**Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
-**Linux:** Run `./build.sh` with OpenWatcom on `$PATH`.
+* **Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
+* **Linux:** Run `./build.sh` with OpenWatcom on `$PATH`.

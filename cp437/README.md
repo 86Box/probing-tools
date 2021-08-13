@@ -13,5 +13,5 @@ Building
 --------
 This tool is automatically built as needed by the build scripts for other tools. Alternatively:
 
-**Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
-**Linux:** Run `./build.sh` with OpenWatcom on `$PATH`.
+* **Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
+* **Linux:** Run `./build.sh` with OpenWatcom on `$PATH`.

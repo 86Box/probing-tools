@@ -152,6 +152,9 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
     /* Build the base CF8h dword for this dump. */
     cf8 = make_cf8(bus, dev, func, 0x00);
 
+    /* Generate dump file name. */
+    sprintf(buf, "PCI%02X%02X%d.BIN", bus, dev, func);
+
     /* Size character '.' indicates a quiet dump for scan_bus. */
     if (sz != '.') {
 	/* Print banner message. */
@@ -207,6 +210,9 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 		putchar('\n');
 	}
     } else {
+	/* Print dump file name now. */
+	printf("Dumping registers to %s", buf);
+
 	infobox = 0;
     }
 
@@ -507,23 +513,35 @@ blank:
 	}
     } while (cur_reg);
 
-    /* Generate dump file name. */
-    sprintf(buf, "PCI%02X%02X%d.BIN", bus, dev, func);
+    /* Print dump file name. */
     if (sz != '.')
 	printf("\nSaving dump to %s\n", buf);
 
     /* Write dump file. */
     f = fopen(buf, "wb");
     if (!f) {
-	printf("File creation failed\n");
+	if (sz != '.')
+		printf("File creation failed\n");
 	return 1;
     }
     if (fwrite(regs, sizeof(regs), 1, f) < 1) {
 	fclose(f);
-	printf("File write failed\n");
+	if (sz != '.')
+		printf("File write failed\n");
 	return 1;
     }
     fclose(f);
+
+    if (sz == '.') {
+	/* Clear the dump file name printed earlier. */
+	width = strlen(buf) + 21;
+	for (i = 0; i < width; i++)
+		putchar('\b');
+	for (i = 0; i < width; i++)
+		putchar(' ');
+	for (i = 0; i < width; i++)
+		putchar('\b');
+    }
 
     return 0;
 }
@@ -867,11 +885,11 @@ retry_buf:
     _getvideoconfig(&vc);
 
     if (mode == '8') {
-    	/* Clear IRQ mapping array. */
+	/* Clear IRQ mapping array. */
 	memset(irq_bitmap, 0, sizeof(irq_bitmap));
 
-    	/* Identify INTx# link value mapping for 86Box mode. */
-    	buf_size = irq_routing_table->len;
+	/* Identify INTx# link value mapping for 86Box mode. */
+	buf_size = irq_routing_table->len;
 	entry = &irq_routing_table->entry[0];
 	while (buf_size >= sizeof(irq_routing_table->entry[0])) {
 		/* Ignore non-root buses. */
@@ -903,7 +921,7 @@ retry_buf:
 		j = sizeof(temp);
 	memcpy(temp, &irq_bitmap[i], j);
 
-    	/* Clear IRQ mapping array again. */
+	/* Clear IRQ mapping array again. */
 	memset(irq_bitmap, 0, sizeof(irq_bitmap));
 
 	/* Fill in mapping entries. */
@@ -1127,10 +1145,10 @@ usage:
 	printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
 	printf("\n");
 	printf("PCIREG -r [bus] device [function] register\n");
-	printf("∟ Read the given register\n");
+	printf("∟ Read the specified register.\n");
 	printf("\n");
 	printf("PCIREG -w [bus] device [function] register value\n");
-	printf("∟ Write byte, word or dword to the given register\n");
+	printf("∟ Write byte, word or dword to the specified register.\n");
 	printf("\n");
 	printf("PCIREG {-d|-dw|-dl} [bus] device [function [register]]\n");
 	printf("∟ Dump registers as bytes (-d), words (-dw) or dwords (-dl). Optionally\n");

@@ -12,10 +12,10 @@ PCIREG -i [-8]
 ∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.
 
 PCIREG -r [bus] device [function] register
-∟ Read the given register
+∟ Read the specified register.
 
 PCIREG -w [bus] device [function] register value
-∟ Write byte, word or dword to the given register
+∟ Write byte, word or dword to the specified register.
 
 PCIREG {-d|-dw|-dl} [bus] device [function [register]]
 ∟ Dump registers as bytes (-d), words (-dw) or dwords (-dl). Optionally

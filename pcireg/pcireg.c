@@ -67,7 +67,7 @@ typedef struct {
 typedef struct {
     uint16_t len;
     union {
-	uint8_t far *data_ptr;
+	void far *data_ptr;
 	irq_routing_entry_t entry[1];
     };
 } irq_routing_table_t;
@@ -835,10 +835,7 @@ comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
     irq_routing_entry_t *a = (irq_routing_entry_t *) elem1;
     irq_routing_entry_t *b = (irq_routing_entry_t *) elem2;
-    uint8_t ret = comp_ui8(&a->bus, &b->bus);
-    if (!ret)
-	ret = comp_ui8(&a->dev, &b->dev);
-    return ret;
+    return comp_ui8(&a->dev, &b->dev);
 }
 
 
@@ -847,13 +844,12 @@ show_steering_table(char mode)
 {
     int i, j, entries;
     uint8_t irq_bitmap[256], temp[4];
-    uint16_t buf_size, dev_class;
+    uint16_t buf_size = 1024, dev_class;
     uint32_t cf8;
     irq_routing_table_t *table;
     irq_routing_entry_t *entry;
 
     /* Allocate buffer for PCI BIOS. */
-    buf_size = 1024;
 retry_buf:
     table = malloc(buf_size);
     if (!table) {
@@ -863,14 +859,14 @@ retry_buf:
 
     /* Specify where the IRQ routing information will be placed. */
     table->len = buf_size;
-    table->data_ptr = (uint8_t far *) table;
+    table->data_ptr = (void far *) table;
 
     /* Call PCI BIOS to fetch IRQ routing information. */
     rp.w.ax = 0xb10e;
     rp.w.bx = 0x0000;
     rp.w.es = FP_SEG(table->data_ptr);
     rp.w.di = FP_OFF(table->data_ptr);
-    table->data_ptr += 2;
+    table->data_ptr = &table->entry[0];
     rp.w.ds = 0xf000;
     intr(0x1a, &rp);
 
@@ -893,22 +889,54 @@ retry_buf:
 	return 1;
     }
 
-    /* Count returned entries. */
-    entries = table->len / sizeof(table->entry[0]);
-
     /* Get terminal size. */
     _getvideoconfig(&vc);
 
+    /* Start output according to the selected mode. */
     if (mode == '8') {
+	/* Stop if no entries were found. */
+	entries = table->len / sizeof(table->entry[0]);
+	if (!entries) {
+		printf("/* No entries found! */\n");
+		return 1;
+	}
+
 	/* Sort table entries by device number for a tidier generated code. */
 	entry = &table->entry[0];
 	qsort(entry, entries, sizeof(table->entry[0]), comp_irq_routing_entry);
 
-	/* Clear data array. */
-	memset(irq_bitmap, 0, sizeof(irq_bitmap));
+	/* Check for and add missing northbridge steering entries. */
+	while (entries > 0) {
+		/* Make sure we are on the first entry for the root bus. */
+		if (entry->bus == 0)
+			break;
+		entries--;
+		entry++;
+	}
+	if (entries > 0) {
+		/* Assume device 00 is the northbridge if it has a host bridge class. */
+		if (entry->dev > 0x00) {
+			cf8 = make_cf8(0x00, 0x00, 0, 0x08);
+			outl(0xcf8, cf8);
+			dev_class = inw(0xcfe);
+			if (dev_class == 0x0600)
+				printf("pci_register_slot(0x00, PCI_CARD_NORTHBRIDGE, 1, 2, 3, 4);\n");
+		}
+		/* Assume device 01 is the AGP bridge if it has a PCI bridge class. */
+		if (entry->dev > 0x01) {
+			cf8 = make_cf8(0x00, 0x01, 0, 0x08);
+			outl(0xcf8, cf8);
+			dev_class = inw(0xcfe);
+			if (dev_class == 0x0604)
+				printf("pci_register_slot(0x01, PCI_CARD_AGPBRIDGE,   1, 2, 3, 4);\n");
+		}
+	}
 
 	/* Identify INTx# link value mapping by gathering all known values. */
-	for (i = 0; i < entries; i++) {
+	memset(irq_bitmap, 0, sizeof(irq_bitmap));
+	entry = &table->entry[0];
+	entries = table->len / sizeof(table->entry[0]);
+	while (entries-- > 0) {
 		/* Ignore non-root buses. */
 		if (!entry->bus) {
 			/* Populate each IRQ link value. */
@@ -936,9 +964,8 @@ retry_buf:
 		j = sizeof(temp);
 	memcpy(temp, &irq_bitmap[i], j);
 
-	/* Clear data array again. */
-	memset(irq_bitmap, 0, sizeof(irq_bitmap));
 	/* Fill in mapping entries. */
+	memset(irq_bitmap, 0, sizeof(irq_bitmap));
 	for (i = 0; i < j; i++) {
 		if (temp[i])
 			irq_bitmap[temp[i]] = i + 1;
@@ -953,10 +980,13 @@ retry_buf:
     }
 
     /* Print entries until the end of the table. */
-    buf_size = table->len;
+    entries = table->len / sizeof(table->entry[0]);
     entry = &table->entry[0];
-    while (buf_size >= sizeof(table->entry[0])) {
+    while (entries-- > 0) {
+	/* Correct device number. */
 	entry->dev >>= 3;
+
+	/* Print entry according to the selected mode. */
 	if (mode == '8') {
 		/* Ignore non-root buses. */
 		if (entry->bus)
@@ -970,7 +1000,7 @@ retry_buf:
 			printf("NORTHBRIDGE,");
 		} else {
 			/* Read device class. */
-			cf8 = make_cf8(entry->bus, entry->dev, 0, 0x08);
+			cf8 = make_cf8(0x00, entry->dev, 0, 0x08);
 			outl(0xcf8, cf8);
 			dev_class = inw(0xcfe);
 
@@ -1009,6 +1039,8 @@ normal:
 		printf(");");
 		if (entry->slot)
 			printf(" /* Slot %02X */", entry->slot);
+		else
+			printf(" /* Onboard */");
 	} else {
 		/* Print slot, bus and device. */
 		printf("  %02X  %02X  %02X ", entry->slot, entry->bus, entry->dev);
@@ -1034,7 +1066,6 @@ normal:
 	/* Move on to the next entry. */
 	putchar('\n');
 next_entry:
-	buf_size -= sizeof(table->entry[0]);
 	entry++;
     }
 

@@ -913,8 +913,8 @@ retry_buf:
 
 	/* Warn if the mapping is incomplete. */
 	j = sizeof(irq_bitmap) - i;
-	if (j < 4)
-		printf("/* WARNING: only %d IRQ link mappings found */\n", j);
+	if (j % 4)
+		printf("/* WARNING: %d IRQ link mappings found */\n", j);
 
 	/* Copy entries to temporary array. */
 	if (j > sizeof(temp))

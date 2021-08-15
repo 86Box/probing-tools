@@ -35,9 +35,9 @@ then
     popd
 fi
 
-# Convert source file to CP437.
-echo '***' Converting $1 to CP437...
-if ! ../cp437/cp437 "$1"
+# Convert source files to CP437.
+echo '***' Converting source to CP437...
+if ! ../cp437/cp437 "$@" > cp437.tmp
 then
     echo '***' Conversion failed.
     exit 2
@@ -47,7 +47,7 @@ fi
 destfile=$(basename "$1" .c | tr [:lower:] [:upper:]).EXE
 
 # Call compiler and check for success.
-if wcl -bcl=dos -fo="$destfile" "$1".cp437
+if wcl -bcl=dos -fo="$destfile" $(cat cp437.tmp)
 then
     echo '***' Build successful.
 else

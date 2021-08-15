@@ -7,6 +7,7 @@ Usage
 ```
 cp437 infile [infile...]
 - Converts UTF-8 input file(s) to CP437 output file(s) with .cp437 appended.
+  The new file names are also printed to stdout.
 ```
 
 Building
@@ -14,4 +15,4 @@ Building
 This tool is automatically built as needed by the build scripts for other tools. Alternatively:
 
 * **Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
-* **Linux:** Run `./build.sh` with OpenWatcom tools present on `$PATH`.
+* **Linux:** Run `./build.sh` with OpenWatcom tools present in `$PATH`.

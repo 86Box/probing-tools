@@ -33,8 +33,8 @@ if not exist ..\cp437\cp437.exe (
 )
 
 :: Convert source file to CP437.
-echo *** Converting %1 to CP437...
-..\cp437\cp437.exe %1
+echo *** Converting source to CP437...
+..\cp437\cp437.exe %* > cp437.tmp
 if errorlevel 1 (
     echo *** Conversion failed.
     exit /b 2
@@ -48,7 +48,9 @@ for %%i in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do set "destfil
 
 :: Call compiler.
 echo *** Building...
-wcl -bcl=dos -fo="!destfile!" "%1.cp437"
+set srcfiles=
+for /f "delims=" %%i in (cp437.tmp) do set srcfiles=!srcfiles! %%i
+wcl -bcl=dos -i=..\lib -fe="!destfile!" %srcfiles%
 
 :: Check for success.
 if errorlevel 1 (

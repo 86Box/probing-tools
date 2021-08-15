@@ -27,13 +27,8 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include "wlib.h"
 
-
-typedef union {
-    uint8_t u8[4];
-    uint16_t u16[2];
-    uint32_t u32;
-} multi_t;
 
 struct videoconfig vc;
 union REGPACK rp; /* things break if this is not a global variable... */
@@ -74,52 +69,6 @@ typedef struct {
 #pragma pack(pop)
 
 
-void outb(uint16_t port, uint8_t data);
-#pragma aux outb = "out dx, al" parm [dx] [al];
-uint8_t inb(uint16_t port);
-#pragma aux inb = "in al, dx" parm [dx] value [al];
-
-void outw(uint16_t port, uint16_t data);
-#pragma aux outw = "out dx, ax" parm [dx] [ax];
-uint16_t inw(uint16_t port);
-#pragma aux inw = "in ax, dx" parm [dx] value [ax];
-
-#ifdef M_I386
-void outl(uint16_t port, uint32_t data);
-# pragma aux outl = "out dx, eax" parm [dx] [eax];
-uint32_t inl(uint16_t port);
-# pragma aux inl = "in eax, dx" parm [dx] value [eax];
-#else
-void outl(uint16_t port, uint32_t data);
-# pragma aux outl =	"xchg ax, cx" \
-			"db 0x66, 0xc1, 0xe0, 0x10" /* shl eax, 16 */ \
-			"mov ax, cx" \
-			"db 0x66" "out dx, ax" /* out dx, eax */ \
-			parm [dx] [ax cx] \
-			modify [ax cx];
-uint32_t inl(uint16_t port);
-# pragma aux inl =	"db 0x66" "in ax, dx" /* in eax, dx */ \
-			"mov cx, ax" \
-			"db 0x66, 0xc1, 0xe8, 0x10" /* shr eax, 16 */ \
-			"xchg ax, cx" \
-			parm [dx] \
-			value [ax cx];
-#endif
-
-
-uint32_t
-make_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
-{
-    multi_t ret;
-    ret.u8[3] = 0x80;
-    ret.u8[2] = bus;
-    ret.u8[1] = dev << 3;
-    ret.u8[1] |= func & 7;
-    ret.u8[0] = reg & 0xfc;
-    return ret.u32;
-}
-
-
 char *
 read_string(FILE *f, uint32_t offset)
 {
@@ -148,7 +97,7 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
     start_reg &= 0xfc;
 
     /* Build the base CF8h dword for this dump. */
-    cf8 = make_cf8(bus, dev, func, 0x00);
+    cf8 = pci_cf8(bus, dev, func, 0x00);
 
     /* Generate dump file name. */
     sprintf(buf, "PCI%02X%02X%d.BIN", bus, dev, func);
@@ -568,7 +517,7 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 			dev_id.u32 = 0xffffffff;
 		}
 #else
-		cf8 = make_cf8(bus, dev, func, 0x00);
+		cf8 = pci_cf8(bus, dev, func, 0x00);
 		outl(0xcf8, cf8);
 		dev_id.u32 = inl(0xcfc);
 #endif
@@ -595,7 +544,7 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 			dev_rev_class.u16[0] = rand();
 			dev_rev_class.u16[1] = rand();
 #else
-			cf8 = make_cf8(bus, dev, func, 0x08);
+			cf8 = pci_cf8(bus, dev, func, 0x08);
 			outl(0xcf8, cf8);
 			dev_rev_class.u32 = inl(0xcfc);
 #endif
@@ -721,7 +670,7 @@ unknown:
 #ifdef DEBUG
 		header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
 #else
-		cf8 = make_cf8(bus, dev, func, 0x0c);
+		cf8 = pci_cf8(bus, dev, func, 0x0c);
 		outl(0xcf8, cf8);
 		header_type = inb(0xcfe);
 #endif
@@ -732,7 +681,7 @@ unknown:
 #ifdef DEBUG
 			new_bus = bus + 1;
 #else
-			cf8 = make_cf8(bus, dev, func, 0x18);
+			cf8 = pci_cf8(bus, dev, func, 0x18);
 			outl(0xcf8, cf8);
 			new_bus = inb(0xcfd);
 #endif
@@ -803,7 +752,7 @@ read_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 	   bus, dev, func, reg | 3, reg & 0xfc);
 
     /* Read dword value from register. */
-    cf8 = make_cf8(bus, dev, func, reg);
+    cf8 = pci_cf8(bus, dev, func, reg);
 #ifdef DEBUG
     reg_val.u32 = cf8;
 #else
@@ -916,7 +865,7 @@ retry_buf:
 	if (entries > 0) {
 		/* Assume device 00 is the northbridge if it has a host bridge class. */
 		if (entry->dev > 0x00) {
-			cf8 = make_cf8(0x00, 0x00, 0, 0x08);
+			cf8 = pci_cf8(0x00, 0x00, 0, 0x08);
 			outl(0xcf8, cf8);
 			dev_class = inw(0xcfe);
 			if (dev_class == 0x0600)
@@ -924,7 +873,7 @@ retry_buf:
 		}
 		/* Assume device 01 is the AGP bridge if it has a PCI bridge class. */
 		if (entry->dev > 0x01) {
-			cf8 = make_cf8(0x00, 0x01, 0, 0x08);
+			cf8 = pci_cf8(0x00, 0x01, 0, 0x08);
 			outl(0xcf8, cf8);
 			dev_class = inw(0xcfe);
 			if (dev_class == 0x0604)
@@ -1000,7 +949,7 @@ retry_buf:
 			printf("NORTHBRIDGE,");
 		} else {
 			/* Read device class. */
-			cf8 = make_cf8(0x00, entry->dev, 0, 0x08);
+			cf8 = pci_cf8(0x00, entry->dev, 0, 0x08);
 			outl(0xcf8, cf8);
 			dev_class = inw(0xcfe);
 
@@ -1081,7 +1030,7 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
     multi_t reg_val;
 
     /* Write a byte, word or dword depending on the input value's length. */
-    cf8 = make_cf8(bus, dev, func, reg);
+    cf8 = pci_cf8(bus, dev, func, reg);
     data_port = 0xcfc;
     switch (strlen(val)) {
 	case 1:

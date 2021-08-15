@@ -48,8 +48,9 @@ main(int argc, char **argv)
     char *buf;
     FILE *fin, *fout;
 
-    /* Disable stdout buffering. */
+    /* Disable stdout/stderr buffering. */
     setbuf(stdout, NULL);
+    setbuf(stderr, NULL);
 
     /* Print usage if no input files were specified. */
     if (argc < 2) {
@@ -57,6 +58,7 @@ main(int argc, char **argv)
 	printf("\n");
 	printf("cp437 infile [infile...]\n");
 	printf("- Converts UTF-8 input file(s) to CP437 output file(s) with .cp437 appended.\n");
+	printf("  The new file names are also printed to stdout.\n");
 	return 1;
     }
 
@@ -66,23 +68,23 @@ main(int argc, char **argv)
 	/* Open input file. */
 	fin = fopen(argv[i], "rb");
 	if (!fin) {
-		printf("Could not open input file \"%s\"\n", argv[i]);
+		fprintf(stderr, "Could not open input file \"%s\"\n", argv[i]);
 		continue;
 	}
 
 	/* Generate output file name. */
 	buf = malloc(strlen(argv[i]) + 7);
-	sprintf(buf, "%s.cp437", argv[i]);
+	sprintf(buf, "%s_cp437", argv[i]);
 
 	/* Open output file. */
 	fout = fopen(buf, "wb");
 	if (!fout) {
 		fclose(fin);
-		printf("Could not open output file \"%s\"\n", buf);
+		fprintf(stderr, "Could not open output file \"%s\"\n", buf);
 		continue;
 	}
 
-	printf("Processing \"%s\"\n", argv[i]);
+	printf("%s\n", buf);
 
 	/* Perform the conversion. */
 	while (!feof(fin)) {

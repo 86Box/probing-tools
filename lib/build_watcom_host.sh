@@ -26,7 +26,7 @@ fi
 destfile=$(basename "$1" .c)
 
 # Call compiler and check for success.
-if wcl386 -bcl=linux -fo="$destfile" "$1"
+if wcl386 -bcl=linux -fo="$destfile" "$@"
 then
     echo '***' Build successful.
     chmod +x "$destfile"

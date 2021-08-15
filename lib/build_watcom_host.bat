@@ -29,7 +29,7 @@ set destfile=%srcfile:~0,-2%.exe
 
 :: Call compiler.
 echo *** Building...
-wcl386 -bcl=nt -fo="%destfile%" "%1"
+wcl386 -bcl=nt -fo="%destfile%" %*
 
 :: Check for success.
 if errorlevel 1 (

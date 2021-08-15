@@ -1,7 +1,8 @@
 # cp437 tool
 cp437/cp437
 cp437/cp437.exe
-*.cp437
+cp437.tmp
+*_cp437
 
 # Watcom C
 *.err

@@ -981,7 +981,7 @@ retry_buf:
 				printf("SOUTHBRIDGE,");
 			} else if (entry->slot == 0) {
 				/* Very likely to be an onboard device. */
-				if (((dev_class & 0xff00) == 0x0300) || (dev_class == 0x0400))
+				if ((dev_class & 0xff00) == 0x0300)
 					printf("VIDEO,      ");
 				else if ((dev_class == 0x0401) || (dev_class == 0x0403))
 					printf("SOUND,      ");

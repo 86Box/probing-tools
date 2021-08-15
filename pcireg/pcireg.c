@@ -64,15 +64,13 @@ typedef struct {
     } ints[4];
     uint8_t slot, reserved;
 } irq_routing_entry_t;
-struct {
+typedef struct {
     uint16_t len;
-    void far *table_ptr;
-    irq_routing_entry_t entry[1];
-} far *irq_routing_table;
-struct _irq_steering_table_ {
-    uint32_t signature;
-    uint8_t ver_min, ver_maj, size, dummy[25], cksum;
-} far *irq_steering_table;
+    union {
+	uint8_t far *data_ptr;
+	irq_routing_entry_t entry[1];
+    };
+} irq_routing_table_t;
 #pragma pack(pop)
 
 
@@ -833,47 +831,61 @@ comp_ui8(const void *elem1, const void *elem2)
 
 
 int
+comp_irq_routing_entry(const void *elem1, const void *elem2)
+{
+    irq_routing_entry_t *a = (irq_routing_entry_t *) elem1;
+    irq_routing_entry_t *b = (irq_routing_entry_t *) elem2;
+    uint8_t ret = comp_ui8(&a->bus, &b->bus);
+    if (!ret)
+	ret = comp_ui8(&a->dev, &b->dev);
+    return ret;
+}
+
+
+int
 show_steering_table(char mode)
 {
-    int i, j;
+    int i, j, entries;
     uint8_t irq_bitmap[256], temp[4];
     uint16_t buf_size, dev_class;
     uint32_t cf8;
-    irq_routing_entry_t far *entry;
+    irq_routing_table_t *table;
+    irq_routing_entry_t *entry;
 
     /* Allocate buffer for PCI BIOS. */
     buf_size = 1024;
 retry_buf:
-    irq_routing_table = _fmalloc(buf_size);
-    if (!irq_routing_table) {
+    table = malloc(buf_size);
+    if (!table) {
 	printf("Failed to allocate %d bytes.\n", buf_size);
 	return 1;
     }
 
     /* Specify where the IRQ routing information will be placed. */
-    irq_routing_table->len = buf_size;
-    irq_routing_table->table_ptr = &irq_routing_table->entry[0];
+    table->len = buf_size;
+    table->data_ptr = (uint8_t far *) table;
 
     /* Call PCI BIOS to fetch IRQ routing information. */
     rp.w.ax = 0xb10e;
     rp.w.bx = 0x0000;
-    rp.w.es = FP_SEG(irq_routing_table);
-    rp.w.di = FP_OFF(irq_routing_table);
+    rp.w.es = FP_SEG(table->data_ptr);
+    rp.w.di = FP_OFF(table->data_ptr);
+    table->data_ptr += 2;
     rp.w.ds = 0xf000;
     intr(0x1a, &rp);
 
     /* Check for any returned error. */
-    if ((rp.h.ah == 0x59) && (irq_routing_table->len > buf_size)) {
+    if ((rp.h.ah == 0x59) && (table->len > buf_size)) {
 	/* Re-allocate buffer with the requested size. */
-	buf_size = irq_routing_table->len;
+	buf_size = table->len;
 	printf("PCI BIOS claims %d bytes for table entries, ", buf_size);
 	if (buf_size >= 65530) {
 		printf("which looks invalid.\n");
 		return 1;
 	}
-	printf("retrying...\n", buf_size);
-	buf_size += 6;
-	_ffree(irq_routing_table);
+	printf("retrying...\n");
+	buf_size += 2;
+	free(table);
 	goto retry_buf;
     } else if (rp.h.ah) {
 	/* Something else went wrong. */
@@ -881,49 +893,51 @@ retry_buf:
 	return 1;
     }
 
+    /* Count returned entries. */
+    entries = table->len / sizeof(table->entry[0]);
+
     /* Get terminal size. */
     _getvideoconfig(&vc);
 
     if (mode == '8') {
-	/* Clear IRQ mapping array. */
+	/* Sort table entries by device number for a tidier generated code. */
+	entry = &table->entry[0];
+	qsort(entry, entries, sizeof(table->entry[0]), comp_irq_routing_entry);
+
+	/* Clear data array. */
 	memset(irq_bitmap, 0, sizeof(irq_bitmap));
 
-	/* Identify INTx# link value mapping for 86Box mode. */
-	buf_size = irq_routing_table->len;
-	entry = &irq_routing_table->entry[0];
-	while (buf_size >= sizeof(irq_routing_table->entry[0])) {
+	/* Identify INTx# link value mapping by gathering all known values. */
+	for (i = 0; i < entries; i++) {
 		/* Ignore non-root buses. */
-		if (entry->bus)
-			continue;
-
-		/* Populate each IRQ link value. */
-		for (i = 0; i < 4; i++)
-			irq_bitmap[entry->ints[i].link] = entry->ints[i].link;
+		if (!entry->bus) {
+			/* Populate each IRQ link value. */
+			for (j = 0; j < 4; j++)
+				irq_bitmap[entry->ints[j].link] = entry->ints[j].link;
+		}
 
 		/* Move on to the next entry. */
-		buf_size -= sizeof(irq_routing_table->entry[0]);
 		entry++;
 	}
 
-	/* Sort entries. */
+	/* Sort link value entries. */
 	qsort(irq_bitmap, sizeof(irq_bitmap), sizeof(irq_bitmap[0]), comp_ui8);
 
-	/* Jump to the first non-zero entry. */
+	/* Jump to the first non-zero link value entry. */
 	for (i = 0; (i < sizeof(irq_bitmap)) && (!irq_bitmap[i]); i++);
 
-	/* Warn if the mapping is incomplete. */
+	/* Warn if the mapping might not be completely valid. */
 	j = sizeof(irq_bitmap) - i;
 	if (j % 4)
 		printf("/* WARNING: %d IRQ link mappings found */\n", j);
 
-	/* Copy entries to temporary array. */
+	/* Copy link value entries to temporary array. */
 	if (j > sizeof(temp))
 		j = sizeof(temp);
 	memcpy(temp, &irq_bitmap[i], j);
 
-	/* Clear IRQ mapping array again. */
+	/* Clear data array again. */
 	memset(irq_bitmap, 0, sizeof(irq_bitmap));
-
 	/* Fill in mapping entries. */
 	for (i = 0; i < j; i++) {
 		if (temp[i])
@@ -939,9 +953,9 @@ retry_buf:
     }
 
     /* Print entries until the end of the table. */
-    buf_size = irq_routing_table->len;
-    entry = &irq_routing_table->entry[0];
-    while (buf_size >= sizeof(irq_routing_table->entry[0])) {
+    buf_size = table->len;
+    entry = &table->entry[0];
+    while (buf_size >= sizeof(table->entry[0])) {
 	entry->dev >>= 3;
 	if (mode == '8') {
 		/* Ignore non-root buses. */
@@ -1020,7 +1034,7 @@ normal:
 	/* Move on to the next entry. */
 	putchar('\n');
 next_entry:
-	buf_size -= sizeof(irq_routing_table->entry[0]);
+	buf_size -= sizeof(table->entry[0]);
 	entry++;
     }
 

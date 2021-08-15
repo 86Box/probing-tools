@@ -20,9 +20,9 @@
 
 
 /* This is the text renderer's CP437 character conversion table,
-   with 00, 09, 0A and 0D modified for text processing purposes. */
+   with 09, 0A and 0D modified for text processing purposes. */
 static const char *cp437[] = {
-    /* 00 */ "",             "\xE2\x98\xBA", "\xE2\x98\xBB", "\xE2\x99\xA5", "\xE2\x99\xA6", "\xE2\x99\xA3", "\xE2\x99\xA0", "\xE2\x80\xA2", "\xE2\x97\x98", "\t",           "\n",           "\xE2\x99\x82", "\xE2\x99\x80", "\r",           "\xE2\x99\xAB", "\xE2\x98\xBC",
+    /* 00 */ " ",            "\xE2\x98\xBA", "\xE2\x98\xBB", "\xE2\x99\xA5", "\xE2\x99\xA6", "\xE2\x99\xA3", "\xE2\x99\xA0", "\xE2\x80\xA2", "\xE2\x97\x98", "\t",           "\n",           "\xE2\x99\x82", "\xE2\x99\x80", "\r",           "\xE2\x99\xAB", "\xE2\x98\xBC",
     /* 10 */ "\xE2\x96\xBA", "\xE2\x97\x84", "\xE2\x86\x95", "\xE2\x80\xBC", "\xC2\xB6",     "\xC2\xA7",     "\xE2\x96\xAC", "\xE2\x86\xA8", "\xE2\x86\x91", "\xE2\x86\x93", "\xE2\x86\x92", "\xE2\x86\x90", "\xE2\x88\x9F", "\xE2\x86\x94", "\xE2\x96\xB2", "\xE2\x96\xBC",
     /* 20 */ " ",            "!",            "\"",           "#",            "$",            "%",            "&",            "'",            "(",            ")",            "*",            "+",            ",",            "-",            ".",            "/",
     /* 30 */ "0",            "1",            "2",            "3",            "4",            "5",            "6",            "7",            "8",            "9",            ":",            ";",            "<",            "=",            ">",            "?",

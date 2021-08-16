@@ -29,7 +29,12 @@ typedef union {
 #pragma pack(pop)
 
 
-/* Port I/O functions. */
+/* Inline assembly functions. */
+void cli();
+#pragma aux cli = "cli";
+void sti();
+#pragma aux sti = "sti";
+
 uint8_t inb(uint16_t port);
 #pragma aux inb = "in al, dx" parm [dx] value [al];
 void outb(uint16_t port, uint8_t data);
@@ -66,5 +71,11 @@ void outl(uint16_t port, uint32_t data);
 
 /* PCI functions. */
 extern uint32_t	pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern uint8_t	pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern uint16_t	pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern uint32_t	pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern void	pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val);
+extern void	pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val);
+extern void	pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val);
 
 #endif

@@ -89,15 +89,11 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
     int i, width, infobox, flags, bar_id;
     char buf[13];
     uint8_t cur_reg, regs[256], dev_type, bar_reg;
-    uint32_t cf8;
     multi_t reg_val;
     FILE *f;
 
     /* Align the starting register. */
     start_reg &= 0xfc;
-
-    /* Build the base CF8h dword for this dump. */
-    cf8 = pci_cf8(bus, dev, func, 0x00);
 
     /* Generate dump file name. */
     sprintf(buf, "PCI%02X%02X%d.BIN", bus, dev, func);
@@ -201,10 +197,9 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 		} else {
 			/* Yes, read dword value. */
 #ifdef DEBUG
-			reg_val.u32 = cf8 | cur_reg;
+			reg_val.u32 = pci_cf8(bus, dev, func, cur_reg);
 #else
-			outl(0xcf8, cf8 | cur_reg);
-			reg_val.u32 = inl(0xcfc);
+			reg_val.u32 = pci_readl(bus, dev, func, cur_reg);
 #endif
 
 			/* Print the value as bytes/words/dword. */
@@ -500,7 +495,6 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
     int i, j, count, last_count, children;
     char *temp;
     uint8_t dev, func, header_type, new_bus, row, column;
-    uint32_t cf8;
     multi_t dev_id, dev_rev_class;
 
     /* Iterate through devices. */
@@ -517,9 +511,7 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 			dev_id.u32 = 0xffffffff;
 		}
 #else
-		cf8 = pci_cf8(bus, dev, func, 0x00);
-		outl(0xcf8, cf8);
-		dev_id.u32 = inl(0xcfc);
+		dev_id.u32 = pci_readl(bus, dev, func, 0x00);
 #endif
 
 		/* Report a valid ID. */
@@ -544,9 +536,7 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 			dev_rev_class.u16[0] = rand();
 			dev_rev_class.u16[1] = rand();
 #else
-			cf8 = pci_cf8(bus, dev, func, 0x08);
-			outl(0xcf8, cf8);
-			dev_rev_class.u32 = inl(0xcfc);
+			dev_rev_class.u32 = pci_readl(bus, dev, func, 0x08);
 #endif
 
 			/* Look up vendor name in the database file. */
@@ -670,9 +660,7 @@ unknown:
 #ifdef DEBUG
 		header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
 #else
-		cf8 = pci_cf8(bus, dev, func, 0x0c);
-		outl(0xcf8, cf8);
-		header_type = inb(0xcfe);
+		header_type = pci_readb(bus, dev, func, 0x0e);
 #endif
 
 		/* If this is a bridge, mark that we should probe its bus. */
@@ -681,9 +669,7 @@ unknown:
 #ifdef DEBUG
 			new_bus = bus + 1;
 #else
-			cf8 = pci_cf8(bus, dev, func, 0x18);
-			outl(0xcf8, cf8);
-			new_bus = inb(0xcfd);
+			new_bus = pci_readb(bus, dev, func, 0x19);
 #endif
 
 			/* Scan the secondary bus. */
@@ -744,7 +730,6 @@ scan_buses(char dump)
 int
 read_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
-    uint32_t cf8;
     multi_t reg_val;
 
     /* Print banner message. */
@@ -752,12 +737,10 @@ read_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 	   bus, dev, func, reg | 3, reg & 0xfc);
 
     /* Read dword value from register. */
-    cf8 = pci_cf8(bus, dev, func, reg);
 #ifdef DEBUG
-    reg_val.u32 = cf8;
+    reg_val.u32 = pci_cf8(bus, dev, func, reg);
 #else
-    outl(0xcf8, cf8);
-    reg_val.u32 = inl(0xcfc);
+    reg_val.u32 = pci_readl(bus, dev, func, reg);
 #endif
 
     /* Print value as a dword and bytes. */
@@ -794,7 +777,6 @@ show_steering_table(char mode)
     int i, j, entries;
     uint8_t irq_bitmap[256], temp[4];
     uint16_t buf_size = 1024, dev_class;
-    uint32_t cf8;
     irq_routing_table_t *table;
     irq_routing_entry_t *entry;
 
@@ -865,17 +847,13 @@ retry_buf:
 	if (entries > 0) {
 		/* Assume device 00 is the northbridge if it has a host bridge class. */
 		if (entry->dev > 0x00) {
-			cf8 = pci_cf8(0x00, 0x00, 0, 0x08);
-			outl(0xcf8, cf8);
-			dev_class = inw(0xcfe);
+			dev_class = pci_readw(0x00, 0x00, 0, 0x0a);
 			if (dev_class == 0x0600)
 				printf("pci_register_slot(0x00, PCI_CARD_NORTHBRIDGE, 1, 2, 3, 4);\n");
 		}
 		/* Assume device 01 is the AGP bridge if it has a PCI bridge class. */
 		if (entry->dev > 0x01) {
-			cf8 = pci_cf8(0x00, 0x01, 0, 0x08);
-			outl(0xcf8, cf8);
-			dev_class = inw(0xcfe);
+			dev_class = pci_readw(0x00, 0x01, 0, 0x0a);
 			if (dev_class == 0x0604)
 				printf("pci_register_slot(0x01, PCI_CARD_AGPBRIDGE,   1, 2, 3, 4);\n");
 		}
@@ -949,9 +927,7 @@ retry_buf:
 			printf("NORTHBRIDGE,");
 		} else {
 			/* Read device class. */
-			cf8 = pci_cf8(0x00, entry->dev, 0, 0x08);
-			outl(0xcf8, cf8);
-			dev_class = inw(0xcfe);
+			dev_class = pci_readw(0x00, 0x00, 0, 0x0a);
 
 			/* Determine slot type by location and class. */
 			if ((entry->dev == 1) && (dev_class == 0x0604)) {
@@ -1026,11 +1002,9 @@ int
 write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 {
     uint16_t data_port;
-    uint32_t cf8;
     multi_t reg_val;
 
     /* Write a byte, word or dword depending on the input value's length. */
-    cf8 = pci_cf8(bus, dev, func, reg);
     data_port = 0xcfc;
     switch (strlen(val)) {
 	case 1:
@@ -1044,15 +1018,15 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 		       bus, dev, func, reg);
 
 		/* Write byte value to register. */
-		data_port |= reg & 3;
-		outl(0xcf8, cf8);
-		outb(data_port, reg_val.u8[0]);
+		pci_writeb(bus, dev, func, reg, reg_val.u8[0]);
 		printf("Written!\n");
 
 		/* Read the register's byte value back. */
-#ifndef DEBUG
-		outl(0xcf8, cf8);
-		reg_val.u8[0] = inb(data_port);
+#ifdef DEBUG
+		reg_val.u32 = pci_cf8(bus, dev, func, reg);
+		reg_val.u8[0] = reg_val.u8[reg & 3];
+#else
+		reg_val.u8[0] = pci_readb(bus, dev, func, reg);
 #endif
 		printf("Readback: %02X\n", reg_val.u8[0]);
 
@@ -1069,15 +1043,15 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 		       bus, dev, func, reg | 1, reg & 0xfe);
 
 		/* Write word value to register. */
-		data_port |= reg & 2;
-		outl(0xcf8, cf8);
-		outw(data_port, reg_val.u16[0]);
+		pci_writew(bus, dev, func, reg, reg_val.u16[0]);
 		printf("Written!\n");
 
 		/* Read the register's word value back. */
-#ifndef DEBUG
-		outl(0xcf8, cf8);
-		reg_val.u16[0] = inw(data_port);
+#ifdef DEBUG
+		reg_val.u32 = pci_cf8(bus, dev, func, reg);
+		reg_val.u16[0] = reg_val.u16[(reg >> 1) & 1];
+#else
+		reg_val.u16[0] = pci_readw(bus, dev, func, reg);
 #endif
 		printf("Readback: %04X / %02X %02X\n",
 		       reg_val.u16[0],
@@ -1095,14 +1069,14 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 		       bus, dev, func, reg | 3, reg & 0xfc);
 
 		/* Write dword value to register. */
-		outl(0xcf8, cf8);
-		outl(data_port, reg_val.u32);
+		pci_writel(bus, dev, func, reg, reg_val.u32);
 		printf("Written!\n");
 
 		/* Read the register's dword value back. */
-#ifndef DEBUG
-		outl(0xcf8, cf8);
-		reg_val.u32 = inl(data_port);
+#ifdef DEBUG
+		reg_val.u32 = pci_cf8(bus, dev, func, reg);
+#else
+		reg_val.u32 = pci_readl(bus, dev, func, reg);
 #endif
 		printf("Readback: %04X%04X / %04X %04X / %02X %02X %02X %02X\n",
 		       reg_val.u16[1], reg_val.u16[0],

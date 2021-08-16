@@ -8,7 +8,7 @@ Usage
 PCIREG -s [-d]
 ∟ Display all devices on the PCI bus. Specify -d to dump registers as well.
 
-PCIREG -i [-8]
+PCIREG -t [-8]
 ∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.
 
 PCIREG -r [bus] device [function] register

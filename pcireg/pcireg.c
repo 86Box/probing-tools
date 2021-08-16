@@ -1108,7 +1108,7 @@ usage:
 	printf("PCIREG -s [-d]\n");
 	printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
 	printf("\n");
-	printf("PCIREG -i [-8]\n");
+	printf("PCIREG -t [-8]\n");
 	printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
 	printf("\n");
 	printf("PCIREG -r [bus] device [function] register\n");
@@ -1123,7 +1123,7 @@ usage:
 	printf("\n");
 	printf("All numeric parameters should be specified in hexadecimal (without 0x prefix).\n");
 	printf("{bus device function register} can be substituted for a single port CF8h dword.\n");
-	printf("Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.\n");
+	printf("Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.");
 	return 1;
     }
 
@@ -1152,7 +1152,7 @@ usage:
 		return scan_buses(argv[2][1]);
 	else
 		return scan_buses('\0');
-    } else if (argv[1][1] == 'i') {
+    } else if (argv[1][1] == 't') {
 	/* Steering table display only requires a single optional parameter. */
 	if ((argc >= 3) && (strlen(argv[2]) > 1))
 		return show_steering_table(argv[2][1]);

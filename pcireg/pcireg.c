@@ -956,8 +956,7 @@ normal:
 		for (i = 0; i < 4; i++) {
 			if (i)
 				putchar(',');
-			putchar(' ');
-			printf("%d", irq_bitmap[entry->ints[i].link]);
+			printf(" %d", irq_bitmap[entry->ints[i].link]);
 		}
 
 		/* Finish line with a comment containing the slot number if present. */

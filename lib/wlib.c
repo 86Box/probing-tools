@@ -24,11 +24,11 @@ pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
     /* Generate a PCI port CF8h dword. */
     multi_t ret;
-    ret.u8[3] = 0x80;
-    ret.u8[2] = bus;
-    ret.u8[1] = dev << 3;
+    ret.u8[3]  = 0x80;
+    ret.u8[2]  = bus;
+    ret.u8[1]  = dev << 3;
     ret.u8[1] |= func & 7;
-    ret.u8[0] = reg & 0xfc;
+    ret.u8[0]  = reg & 0xfc;
     return ret.u32;
 }
 

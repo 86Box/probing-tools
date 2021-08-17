@@ -19,6 +19,15 @@
 #include "wlib.h"
 
 
+int
+comp_ui8(const void *elem1, const void *elem2)
+{
+    uint8_t a = *((uint8_t *) elem1);
+    uint8_t b = *((uint8_t *) elem2);
+    return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+}
+
+
 uint32_t
 pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {

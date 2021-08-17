@@ -30,26 +30,94 @@
 #include "wlib.h"
 
 
-struct videoconfig vc;
-union REGPACK rp; /* things break if this is not a global variable... */
+static const char *command_flags[] = {
+    "I/O",
+    "Mem",
+    "Master",
+    "Special",
+    "Invalidate",
+    "Palette",
+    "Parity",
+    "Wait",
+    "SErr",
+    "FastBack",
+    "DisableINTx",
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+};
+static const char *status_flags[] = {
+    NULL,
+    NULL,
+    NULL,
+    "IRQ",
+    "CapList",
+    "66MHz",
+    "UDF",
+    "FastBack",
+    "ParityErr1",
+    NULL,
+    NULL,
+    "TargetAbort",
+    "TargetAbortAck",
+    "MasterAbort",
+    "SErr",
+    "ParityErr2"
+};
+static const char *devsel[] = {
+    "Fast",
+    "Medium",
+    "Slow",
+    "Invalid"
+};
+
+
+static struct videoconfig vc;
+static union REGPACK rp; /* things break if this is not a global variable... */
+static FILE *pciids_f = NULL;
 
 #pragma pack(push, 0)
-struct {
-    uint32_t dev_db_off, cls_db_off, string_db_offset;
+static struct {
+    uint32_t	device_db_offset,
+    		subdevice_db_offset,
+		class_db_offset,
+		subclass_db_offset,
+		progif_db_offset,
+		string_db_offset;
 } pciids_header;
-struct {
-    uint16_t vendor;
-    uint32_t dev_off;
-    uint32_t string_offset;
+static struct {
+    uint16_t	vendor_id;
+    uint32_t	devices_offset,
+    		string_offset;
 } pciids_vendor;
-struct {
-    uint16_t device;
-    uint32_t string_offset;
+static struct {
+    uint16_t	device_id;
+    uint32_t	subdevices_offset,
+		string_offset;
 } pciids_device;
-struct {
-    uint16_t subclass;
-    uint32_t string_offset;
+static struct {
+    uint16_t	subvendor_id,
+		subdevice_id;
+    uint32_t	string_offset;
+} pciids_subdevice;
+static struct {
+    uint8_t	class_id;
+    uint32_t	string_offset;
 } pciids_class;
+static struct {
+    uint8_t	class_id,
+		subclass_id;
+    uint32_t	string_offset;
+} pciids_subclass;
+static struct {
+    uint8_t	class_id,
+		subclass_id,
+		progif_id;
+    uint32_t	string_offset;
+} pciids_progif;
+
 
 typedef struct {
     uint8_t bus, dev;
@@ -69,21 +137,222 @@ typedef struct {
 #pragma pack(pop)
 
 
-char *
-read_string(FILE *f, uint32_t offset)
+static int
+pciids_open_database()
+{
+    /* No action is required if the file is already open. */
+    if (pciids_f)
+	return 0;
+
+    /* Open file, and stop if the open failed or the header couldn't be read. */
+    pciids_f = fopen("PCIIDS.BIN", "rb");
+    if (pciids_f && (fread(&pciids_header, sizeof(pciids_header), 1, pciids_f) < 1)) {
+	fclose(pciids_f);
+	pciids_f = NULL;
+    }
+
+    /* Return 0 if the file was opened successfully, 1 otherwise. */
+    return !pciids_f;
+}
+
+
+static char *
+pciids_read_string(uint32_t offset)
 {
     uint8_t length, *buf;
 
-    fseek(f, pciids_header.string_db_offset + offset, SEEK_SET);
-    fread(&length, sizeof(length), 1, f);
+    /* Return nothing if the string offset is invalid. */
+    if (offset == 0xffffffff)
+	return NULL;
+
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to string offset. */
+    fseek(pciids_f, pciids_header.string_db_offset + offset, SEEK_SET);
+
+    /* Read string length, and return nothing if it's an empty string. */
+    fread(&length, sizeof(length), 1, pciids_f);
+    if (length == 0)
+	return NULL;
+
+    /* Read string into buffer. */
     buf = malloc(length + 1);
-    fread(buf, length, 1, f);
+    if (fread(buf, length, 1, pciids_f) < 1) {
+	/* Clean up and return nothing if the read failed. */
+	free(buf);
+	return NULL;
+    }
     buf[length] = '\0';
+
     return buf;
 }
 
 
-int
+static int
+pciids_find_vendor(uint16_t vendor_id)
+{
+    /* Open database if required. */
+    if (pciids_open_database())
+	return 0;
+
+    /* Seek to vendor database. */
+    fseek(pciids_f, sizeof(pciids_header), SEEK_SET);
+
+    /* Read vendor entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_vendor, sizeof(pciids_vendor), 1, pciids_f) < 1)
+		break;
+    } while (pciids_vendor.vendor_id < vendor_id);
+
+    /* Return 1 if the ID was matched, 0 otherwise. */
+    return pciids_vendor.vendor_id == vendor_id;
+}
+
+
+static char *
+pciids_get_vendor(uint16_t vendor_id)
+{
+    /* Find vendor ID in the database, and return its name if found. */
+    if (pciids_find_vendor(vendor_id))
+	return pciids_read_string(pciids_vendor.string_offset);
+
+    /* Return nothing if the vendor ID was not found. */
+    return NULL;
+}
+
+
+static char *
+pciids_get_device(uint16_t device_id)
+{
+    /* Must be preceded by a call to {find|get}_vendor to establish the vendor ID! */
+
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to device database entries for the established vendor. */
+    fseek(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset, SEEK_SET);
+
+    /* Read device entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_device, sizeof(pciids_device), 1, pciids_f) < 1)
+		break;
+    } while (pciids_device.device_id < device_id);
+
+    /* Return the device name if found. */
+    if (pciids_device.device_id == device_id)
+	return pciids_read_string(pciids_device.string_offset);
+
+    /* Return nothing if the device ID was not found. */
+    return NULL;
+}
+
+
+static char *
+pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
+{
+    /* Must be preceded by calls to {find|get}_vendor and get_device to establish the vendor/device ID! */
+
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to subdevice database entries for the established subvendor. */
+    fseek(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset, SEEK_SET);
+
+    /* Read subdevice entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_subdevice, sizeof(pciids_subdevice), 1, pciids_f) < 1)
+		break;
+    } while ((pciids_subdevice.subvendor_id < subvendor_id) || (pciids_subdevice.subdevice_id < subdevice_id));
+
+    /* Return the subdevice name if found. */
+    if ((pciids_subdevice.subvendor_id == subvendor_id) && (pciids_subdevice.subdevice_id == subdevice_id))
+	return pciids_read_string(pciids_subdevice.string_offset);
+
+    /* Return nothing if the subdevice ID was not found. */
+    return NULL;
+}
+
+
+static char *
+pciids_get_class(uint8_t class_id)
+{
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to class database. */
+    fseek(pciids_f, pciids_header.class_db_offset, SEEK_SET);
+
+    /* Read class entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_class, sizeof(pciids_class), 1, pciids_f) < 1)
+		break;
+    } while (pciids_class.class_id < class_id);
+
+    /* Return the class name if found. */
+    if (pciids_class.class_id == class_id)
+	return pciids_read_string(pciids_class.string_offset);
+
+    /* Return nothing if the class ID was not found. */
+    return NULL;
+}
+
+
+static char *
+pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
+{
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to subclass database. */
+    fseek(pciids_f, pciids_header.subclass_db_offset, SEEK_SET);
+
+    /* Read subclass entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_subclass, sizeof(pciids_subclass), 1, pciids_f) < 1)
+		break;
+    } while ((pciids_subclass.class_id < class_id) || (pciids_subclass.subclass_id < subclass_id));
+
+    /* Return the subclass name if found. */
+    if ((pciids_subclass.class_id == class_id) && (pciids_subclass.subclass_id == subclass_id))
+	return pciids_read_string(pciids_subclass.string_offset);
+
+    /* Return nothing if the subclass ID was not found. */
+    return NULL;
+}
+
+
+static char *
+pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
+{
+    /* Open database if required. */
+    if (pciids_open_database())
+	return NULL;
+
+    /* Seek to programming interface database. */
+    fseek(pciids_f, pciids_header.progif_db_offset, SEEK_SET);
+
+    /* Read programming interface entries until the ID is matched or overtaken. */
+    do {
+	if (fread(&pciids_progif, sizeof(pciids_progif), 1, pciids_f) < 1)
+		break;
+    } while ((pciids_progif.class_id < class_id) || (pciids_progif.subclass_id < subclass_id) || (pciids_progif.progif_id < progif_id));
+
+    /* Return the programming interface name if found. */
+    if ((pciids_progif.class_id == class_id) && (pciids_progif.subclass_id == subclass_id) && (pciids_progif.progif_id == progif_id))
+	return pciids_read_string(pciids_progif.string_offset);
+
+    /* Return nothing if the programming interface ID was not found. */
+    return NULL;
+}
+
+
+static int
 dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 {
     int i, width, infobox, flags, bar_id;
@@ -489,7 +758,7 @@ blank:
 }
 
 
-int
+static int
 scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 {
     int i, j, count, last_count, children;
@@ -539,55 +808,33 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 			dev_rev_class.u32 = pci_readl(bus, dev, func, 0x08);
 #endif
 
-			/* Look up vendor name in the database file. */
-			if (f) {
-				fseek(f, sizeof(pciids_header), SEEK_SET);
-				do {
-					if (fread(&pciids_vendor, sizeof(pciids_vendor), 1, f) < 1)
-						break;
-				} while (pciids_vendor.vendor < dev_id.u16[0]);
-				if (pciids_vendor.vendor == dev_id.u16[0]) {
-					/* Add vendor name to buffer. */
-					temp = read_string(f, pciids_vendor.string_offset);
-					strcat(buf, temp);
-					strcat(buf, " ");
-					free(temp);
+			/* Look up vendor name in the PCI ID database. */
+			temp = pciids_get_vendor(dev_id.u16[0]);
+			if (temp) {
+				/* Add vendor name to buffer. */
+				strcat(buf, temp);
+				strcat(buf, " ");
+				free(temp);
 
-					/* Look up device name. */
-					fseek(f, pciids_header.dev_db_off + pciids_vendor.dev_off, SEEK_SET);
-					do {
-						if (fread(&pciids_device, sizeof(pciids_device), 1, f) < 1)
-							break;
-					} while (pciids_device.device < dev_id.u16[1]);
-					if (pciids_device.device == dev_id.u16[1]) {
-						/* Add device name to buffer. */
-						temp = read_string(f, pciids_device.string_offset);
-						strcat(buf, temp);
-						free(temp);
-					} else {
-						/* Device name not found. */
-						goto unknown;
-					}
+				/* Look up device name. */
+				temp = pciids_get_device(dev_id.u16[1]);
+				if (temp) {
+					/* Add device name to buffer. */
+					strcat(buf, temp);
+					free(temp);
 				} else {
-					/* Vendor name not found. */
-					strcat(buf, "[Unknown] ");
-					goto unknown;
+					/* Device name not found. */
+					goto unknown_device;
 				}
 			} else {
-unknown:
-				/* Look up class ID. */
+				/* Vendor name not found. */
+				strcat(buf, "[Unknown] ");
 
-				fseek(f, pciids_header.cls_db_off, SEEK_SET);
-				do {
-					if (fread(&pciids_class, sizeof(pciids_class), 1, f) < 1)
-						break;
-				} while (pciids_class.subclass < dev_rev_class.u16[1]);
-				if (pciids_class.subclass == dev_rev_class.u16[1]) {
+unknown_device:			/* Look up class ID. */
+				temp = pciids_get_class(dev_rev_class.u16[1]);
+				if (temp) {
 					/* Add class name to buffer. */
-					strcat(buf, "[");
-					temp = read_string(f, pciids_class.string_offset);
-					strcat(buf, temp);
-					strcat(buf, "]");
+					sprintf(&buf[strlen(buf)], "[%s]", temp);
 					free(temp);
 				} else {
 					/* Class name not found. */
@@ -632,8 +879,10 @@ unknown:
 					children--;
 					rp.h.dh--;
 				}
-				intr(0x10, &rp);
-				putchar('├');
+				if (rp.h.dh != 0xff) {
+					intr(0x10, &rp);
+					putchar('├');
+				}
 
 				/* Restore cursor position. */
 				rp.h.ah = 0x02;
@@ -689,7 +938,7 @@ unknown:
 }
 
 
-int
+static int
 scan_buses(char dump)
 {
     int i;
@@ -699,13 +948,6 @@ scan_buses(char dump)
     /* Initialize buffers. */
     buf = malloc(1024);
     memset(buf, 0, 1024);
-
-    /* Initialize PCI ID database file. */
-    f = fopen("PCIIDS.BIN", "rb");
-    if (f && (fread(&pciids_header, sizeof(pciids_header), 1, f) < 1)) {
-	fclose(f);
-	f = NULL;
-    }
 
     /* Get terminal size. */
     _getvideoconfig(&vc);
@@ -727,42 +969,219 @@ scan_buses(char dump)
 }
 
 
-int
-read_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
+static void
+info_flags_helper(uint16_t bitfield, const char **table)
 {
+    /* Small helper function for printing PCI command/status flags. */
+    int i, j;
+
+    /* Check each bit. */
+    j = 0;
+    for (i = 0; i < 16; i++) {
+    	/* Ignore if there is no table entry. */
+    	if (!table[i])
+    		continue;
+
+	/* Print flag name in [brackets] if set. */
+	if (bitfield & (1 << i))
+		printf(" [%s]", table[i]);
+	else
+		printf("  %s ", table[i]);
+
+    	/* Add line break and indentation after the 7th item. */
+    	if (++j == 7) {
+    		printf("\n        ");
+    		j = 0;
+    	}
+    }
+}
+
+
+static int
+dump_info(uint8_t bus, uint8_t dev, uint8_t func)
+{
+    char *temp;
+    int i;
+    uint8_t header_type, subsys_reg, num_bars;
     multi_t reg_val;
 
     /* Print banner message. */
-    printf("Reading from PCI bus %02X device %02X function %d registers [%02X:%02X]\n",
-	   bus, dev, func, reg | 3, reg & 0xfc);
+    printf("Displaying information for PCI bus %02X device %02X function %d\n",
+	   bus, dev, func);
 
-    /* Read dword value from register. */
+    /* Read vendor/device ID, and stop if it's invalid. */
 #ifdef DEBUG
-    reg_val.u32 = pci_cf8(bus, dev, func, reg);
+    reg_val.u32 = 0x05711106;
 #else
-    reg_val.u32 = pci_readl(bus, dev, func, reg);
+    reg_val.u32 = pci_readl(bus, dev, func, 0x00);
+    if (!reg_val.u32 || (reg_val.u32 == 0xffffffff)) {
+	printf("\nNo device appears to exist here. (vendor:device %04X:%04X)",
+	reg_val.u16[0], reg_val.u16[1]);
+	return 1;
+    }
 #endif
 
-    /* Print value as a dword and bytes. */
-    printf("Value: %04X%04X / %04X %04X / %02X %02X %02X %02X\n",
-	   reg_val.u16[1], reg_val.u16[0],
-	   reg_val.u16[0], reg_val.u16[1],
-	   reg_val.u8[0], reg_val.u8[1], reg_val.u8[2], reg_val.u8[3]);
+    /* Print vendor ID. */
+    printf("\nVendor: [%04X] ", reg_val.u16[0]);
+
+    /* Print vendor name if found. */
+    temp = pciids_get_vendor(reg_val.u16[0]);
+    if (temp) {
+	printf(temp);
+	free(temp);
+    } else {
+	printf("[Unknown]");
+    }
+
+    /* Print device ID. */
+    printf("\nDevice: [%04X] ", reg_val.u16[1]);
+
+    /* Print device name if found. */
+    temp = pciids_get_device(reg_val.u16[1]);
+    if (temp) {
+	printf(temp);
+	free(temp);
+    } else {
+	printf("[Unknown]");
+    }
+
+    /* Read header type. We'll be using it a lot. */
+    header_type = pci_readb(bus, dev, func, 0x0e);
+
+    /* Determine the locations of common registers for this header type. */
+    switch (header_type & 0x7f) {
+	case 0x00: /* standard */
+		subsys_reg = 0x2c;
+		num_bars = 6;
+		break;
+
+	case 0x02: /* CardBus bridge */
+		subsys_reg = 0x40;
+		num_bars = 0;
+		break;
+
+	case 0x03: /* PCI bridge and others */
+		subsys_reg = 0xff;
+		num_bars = 2;
+		break;
+
+	default: /* others */
+		subsys_reg = 0xff;
+		num_bars = 0;
+		break;
+    }
+    if (subsys_reg != 0xff) {
+	/* Read subsystem ID and print it if valid. */
+	reg_val.u32 = pci_readl(bus, dev, func, subsys_reg);
+	if (reg_val.u32 && (reg_val.u32 != 0xffffffff)) {
+		/* Print subvendor ID. */
+		printf("\nSubvendor: [%04X] ", reg_val.u16[0]);
+
+		/* Print subvendor name if found. */
+		temp = pciids_get_vendor(reg_val.u16[0]);
+		if (temp) {
+			printf(temp);
+			free(temp);
+		} else {
+			printf("[Unknown]");
+		}
+
+		/* Print subdevice ID. */
+		printf("\nSubdevice: [%04X] ", reg_val.u16[1]);
+
+		/* Print subdevice ID if found. */
+		temp = pciids_get_subdevice(reg_val.u16[0], reg_val.u16[1]);
+		if (temp) {
+			printf(temp);
+			free(temp);
+		} else {
+			printf("[Unknown]");
+		}
+	}
+    }
+
+    /* Read command and status. */
+    reg_val.u32 = pci_readl(bus, dev, func, 0x04);
+
+    /* Print command and status flags. */
+    printf("\n\nCommand:");
+    info_flags_helper(reg_val.u16[0], command_flags);
+    printf("\n Status:");
+    info_flags_helper(reg_val.u16[1], status_flags);
+    printf(" DEVSEL[%s]", devsel[(reg_val.u16[1] >> 9) & 3]);
+
+    /* Read revision and class ID. */
+    reg_val.u32 = pci_readl(bus, dev, func, 0x08);
+
+    /* Print revision. */
+    printf("\n\nRevision: %02X", reg_val.u8[0]);
+
+    /* Print class ID. */
+    printf("\n\nClass: [%02X] ", reg_val.u8[3]);
+
+    /* Print class name if found. */
+    temp = pciids_get_class(reg_val.u8[3]);
+    if (temp) {
+	printf(temp);
+	free(temp);
+    } else {
+	printf("[Unknown]");
+    }
+
+    /* Print subclass ID. */
+    printf("\n       [%02X] ");
+
+    /* Print subclass name if found. */
+    temp = pciids_get_subclass(reg_val.u8[3], reg_val.u8[2]);
+    if (temp) {
+	printf(temp);
+	free(temp);
+    } else {
+	printf("[Unknown]");
+    }
+
+    /* Print programming interface ID. */
+    printf("\n       [%02X] ");
+
+    /* Print programming interface name if found. */
+    temp = pciids_get_progif(reg_val.u8[3], reg_val.u8[2], reg_val.u8[1]);
+    if (temp) {
+	printf(temp);
+	free(temp);
+    } else {
+	printf("[Unknown]");
+    }
+
+    /* Read and print BARs. */
+    for (i = 0; i < num_bars; i++) {
+    	if (i == 0)
+    		putchar('\n');
+
+    	/* Read BAR. */
+    	reg_val.u32 = pci_readl(bus, dev, func, 0x10 + (i << 2));
+
+    	/* Move on to the next BAR if this one doesn't appear to be valid. */
+    	if (!reg_val.u32 || (reg_val.u32 == 0xffffffff))
+    		continue;
+
+    	/* Print BAR index. */
+    	printf("\nBAR %d: ", i);
+
+    	/* Print BAR type and address. */
+    	if (i & 1)
+    		printf("I/O at %04X", reg_val.u16[0] & 0xfffc);
+    	else
+    		printf("Memory at %04X%04X", reg_val.u16[1], reg_val.u16[0] & 0xfff0);
+
+    }
+
+    printf("\n");
 
     return 0;
 }
 
 
-int
-comp_ui8(const void *elem1, const void *elem2)
-{
-    uint8_t a = *((uint8_t *) elem1);
-    uint8_t b = *((uint8_t *) elem2);
-    return ((a < b) ? -1 : ((a > b) ? 1 : 0));
-}
-
-
-int
+static int
 comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
     irq_routing_entry_t *a = (irq_routing_entry_t *) elem1;
@@ -771,8 +1190,8 @@ comp_irq_routing_entry(const void *elem1, const void *elem2)
 }
 
 
-int
-show_steering_table(char mode)
+static int
+dump_steering_table(char mode)
 {
     int i, j, entries;
     uint8_t irq_bitmap[256], temp[4];
@@ -997,7 +1416,33 @@ next_entry:
 }
 
 
-int
+static int
+read_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
+{
+    multi_t reg_val;
+
+    /* Print banner message. */
+    printf("Reading from PCI bus %02X device %02X function %d registers [%02X:%02X]\n",
+	   bus, dev, func, reg | 3, reg & 0xfc);
+
+    /* Read dword value from register. */
+#ifdef DEBUG
+    reg_val.u32 = pci_cf8(bus, dev, func, reg);
+#else
+    reg_val.u32 = pci_readl(bus, dev, func, reg);
+#endif
+
+    /* Print value as a dword and bytes. */
+    printf("Value: %04X%04X / %04X %04X / %02X %02X %02X %02X\n",
+	   reg_val.u16[1], reg_val.u16[0],
+	   reg_val.u16[0], reg_val.u16[1],
+	   reg_val.u8[0], reg_val.u8[1], reg_val.u8[2], reg_val.u8[3]);
+
+    return 0;
+}
+
+
+static int
 write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 {
     uint16_t data_port;
@@ -1111,6 +1556,9 @@ usage:
 	printf("PCIREG -t [-8]\n");
 	printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
 	printf("\n");
+	printf("PCIREG -i [bus] device [function]\n");
+	printf("∟ Show information about the specified device.\n");
+	printf("\n");
 	printf("PCIREG -r [bus] device [function] register\n");
 	printf("∟ Read the specified register.\n");
 	printf("\n");
@@ -1155,9 +1603,9 @@ usage:
     } else if (argv[1][1] == 't') {
 	/* Steering table display only requires a single optional parameter. */
 	if ((argc >= 3) && (strlen(argv[2]) > 1))
-		return show_steering_table(argv[2][1]);
+		return dump_steering_table(argv[2][1]);
 	else
-		return show_steering_table('\0');
+		return dump_steering_table('\0');
     } else if ((argc >= 3) && (strlen(argv[1]) > 1)) {
 	/* Read second parameter as a dword. */
 	nonhex = 0;
@@ -1186,10 +1634,13 @@ usage:
 		goto usage;
 	}
 
-	if (argv[1][1] == 'd') {
-		/* Process parameters for a register dump. */
+	if ((argv[1][1] == 'd') || (argv[1][1] == 'i')) {
+		/* Process parameters for a register or information dump. */
 		switch (hexargc) {
 			case 4:
+				/* Specifying a register is not valid on an information dump. */
+				if (argv[1][1] == 'i')
+					goto usage;
 				reg = hexargv[3];
 				/* fall-through */
 
@@ -1215,7 +1666,15 @@ usage:
 		}
 
 		/* Start the operation. */
-		return dump_regs(bus, dev, func, reg, argv[1][2]);
+		switch (argv[1][1]) {
+			case 'd':
+				/* Start register dump. */
+				return dump_regs(bus, dev, func, reg, argv[1][2]);
+
+			case 'i':
+				/* Start information dump. */
+				return dump_info(bus, dev, func);
+		}
 	} else {
 		/* Subtract value parameter from a write operation. */
 		if (argv[1][1] == 'w')

@@ -11,6 +11,9 @@ PCIREG -s [-d]
 PCIREG -t [-8]
 ∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.
 
+PCIREG -i [bus] device [function]
+∟ Show information about the specified device.
+
 PCIREG -r [bus] device [function] register
 ∟ Read the specified register.
 

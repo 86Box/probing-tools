@@ -18,17 +18,15 @@
 import re, urllib.request
 
 clean_device_abbr = [
-	('100Base-T', 'FE'),
-	('100Base-TX', 'FE'),
+	('100Base-TX?', 'FE'),
 	('1000Base-T', 'GbE'),
-	('Acceleration', 'Accel.'),
-	('Accelerator', 'Accel.'),
+	('Accelerat(?:ion|or)', 'Accel.'),
 	('Alert on LAN', 'AoL'),
 	('Chipset Family', 'Chipset'),
 	('Chipset Graphics', 'iGPU'),
 	('Connection', 'Conn.'),
 	('DECchip', ''),
-	('Dual Port', '2-port'),
+	('Dual (Lane|Port)', '2-\\2'),
 	('Fast Ethernet', 'FE'),
 	('Fibre Channel', 'FC'),
 	('Function', 'Func.'),
@@ -42,25 +40,21 @@ clean_device_abbr = [
 	('Input/Output', 'I/O'),
 	('Integrated ([^\s]+) Graphics', '\\2 iGPU'), # VIA CLE266
 	('Integrated Graphics', 'iGPU'),
-	('([0-9]) lane', '\\2-lane'),
+	('([0-9]) (lane|port)', '\\2-\\3'),
 	('Local Area Network', 'LAN'),
 	('Low Pin Count', 'LPC'),
 	('Memory Controller Hub', 'MCH'),
-	('Network Adapter', 'NIC'),
-	('Network (?:Interface )?Card', 'NIC'),
-	('Network (?:Interface )?Controller', 'NIC'),
+	('Network (?:Interface )?(?:Adapter|Card|Controller)', 'NIC'),
 	('NVM Express', 'NVMe'),
 	('Parallel ATA', 'PATA'),
-	('PCI-E', 'PCIe'),
-	('PCI Express', 'PCIe'),
-	('PCI[- ]to[- ]PCI', 'PCI-PCI'),
+	('PCI(?:-E| Express)', 'PCIe'),
+	('([^- ]+)[- ]to[- ]([^- ]+)', '\\2-\\3'),
 	('Platform Controller Hub', 'PCH'),
-	('([0-9]) port', '\\2-port'),
 	('Processor Graphics', 'iGPU'),
-	('Quad Port', '4-port'),
+	('Quad (Lane|Port)', '4-\\2'),
 	('Serial ATA', 'SATA'),
 	('Serial Attached SCSI', 'SAS'),
-	('Single Port', '1-port'),
+	('Single (Lane|Port)', '1-\\2'),
 	('USB ?([0-9])\\.0', 'USB\\2'),
 	('USB ?([0-9])\\.[0-9] ?Gen([0-9x]+)', 'USB\\2.\\3'),
 	('USB ?([0-9]\\.[0-9])', 'USB\\2'),
@@ -69,7 +63,7 @@ clean_device_abbr = [
 	('Wireless LAN', 'WLAN'),
 ]
 clean_device_bit_pattern = re.compile('''( |^|\(|\[|\{|/)(?:([0-9]{1,4}) )?(?:(K)(?:ilo)?|(M)(?:ega)?|(G)(?:iga)?)bit( |$|\)|\]|\})''', re.I)
-clean_device_group_pattern = re.compile('''\\\\([0-9]+)''')
+clean_device_doubleabbr_pattern = re.compile('''( |^|\(|\[|\{|/)([^ \(\[\{/]+) (?: |\(|\[|\{|/)\\2(?: |\)|\]|\})( |$|\)|\]|\})''')
 clean_device_suffix_pattern = re.compile(''' (?:Adapter|Card|Device|(?:Host )?Controller)( (?: [0-9#]+)?|$|\)|\]|\})''', re.I)
 clean_vendor_abbr_pattern = re.compile(''' \[([^\]]+)\]''')
 clean_vendor_suffix_pattern = re.compile(''' (?:Semiconductors?|(?:Micro)?electronics?|Interactive|Technolog(?:y|ies)|(?:Micro)?systems|Computer(?: works)?|Products|Group|and subsidiaries|of(?: America)?|Co(?:rp(?:oration)?|mpany)?|Inc|LLC|Ltd|GmbH|AB|AG|SA|(?:\(|\[|\{).*)$''', re.I)
@@ -92,6 +86,7 @@ clean_vendor_final = {
 _clean_device_abbr_cache = []
 _pci_vendors = {}
 _pci_devices = {}
+_pci_subdevices = {}
 _pci_classes = {}
 _pci_subclasses = {}
 _pci_progifs = {}
@@ -103,14 +98,15 @@ def clean_device(device, vendor=None):
 	if not _clean_device_abbr_cache:
 		for pattern, replace in clean_device_abbr:
 			_clean_device_abbr_cache.append((
-				re.compile('''( |^|\(|\[|\{|/)''' + pattern + '''( |$|\)|\]|\})''', re.I),
-				'\\g<1>' + replace + '\\g<' + str(1 + len(clean_device_group_pattern.findall(pattern))) + '>',
+				re.compile('''(?P<prefix> |^|\(|\[|\{|/)''' + pattern + '''(?P<suffix> |$|\)|\]|\})''', re.I),
+				'\\g<prefix>' + replace + '\\g<suffix>',
 			))
 
 	# Apply patterns.
 	device = clean_device_bit_pattern.sub('\\1\\2\\3\\4\\5bit\\6', device)
 	for pattern, replace in _clean_device_abbr_cache:
 		device = pattern.sub(replace, device)
+	device = clean_device_doubleabbr_pattern.sub('\\1\\2\\3', device)
 	device = clean_device_suffix_pattern.sub('\\1', device)
 
 	# Remove duplicate vendor ID.
@@ -193,6 +189,11 @@ def load_pci_db():
 		elif line[1] != 9: # device
 			device = (vendor << 16) | int(line[1:5], 16)
 			_pci_devices[device] = line[7:-1].decode('utf8', 'ignore')
+		else: # subdevice
+			subdevice = (int(line[2:6], 16) << 16) | int(line[7:11], 16)
+			if device not in _pci_subdevices:
+				_pci_subdevices[device] = {}
+			_pci_subdevices[device][subdevice] = line[13:-1].decode('utf8', 'ignore')
 
 	f.close()
 

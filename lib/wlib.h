@@ -68,8 +68,10 @@ void outl(uint16_t port, uint32_t data);
 			modify [ax cx];
 #endif
 
+/* Comparator functions. */
+extern int	comp_ui8(const void *elem1, const void *elem2);
 
-/* PCI functions. */
+/* PCI I/O functions. */
 extern uint32_t	pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint8_t	pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint16_t	pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);

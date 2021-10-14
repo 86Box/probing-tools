@@ -1,8 +1,6 @@
-# cp437 tool
-cp437/cp437
-cp437/cp437.exe
-cp437.tmp
-*_cp437
+# GNU C
+*.a
+*.o
 
 # Watcom C
 *.err
@@ -11,3 +9,13 @@ cp437.tmp
 # Python
 __pycache__
 *.pyc
+
+
+# cp437 tool
+cp437/cp437
+cp437/cp437.exe
+*_cp437
+
+# UEFI
+NvVars
+pci?????.bin

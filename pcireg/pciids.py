@@ -97,7 +97,7 @@ def main():
 
 	# Enumerate vendor IDs.
 	print('Enumerating vendors...')
-	for vendor_id in sorted(vendor_devices_offset):
+	for vendor_id in sorted(pciutil._pci_vendors):
 		# Look up vendor ID.
 		vendor = pciutil.clean_vendor(pciutil._pci_vendors.get(vendor_id, '')).encode('cp437', 'ignore')[:256]
 
@@ -115,7 +115,7 @@ def main():
 		devices_offset = vendor_devices_offset.get(vendor_id, None)
 		if devices_offset == None:
 			devices_offset = 0xffffffff
-		if string_db_pos != 0xffffffff and devices_offset != 0xffffffff:
+		if string_db_pos != 0xffffffff or devices_offset != 0xffffffff:
 			vendor_db += struct.pack('<HII', vendor_id, devices_offset, string_db_pos)
 			vendor_has_termination = vendor_id == 0xffff
 
@@ -156,7 +156,7 @@ def main():
 			string_db_pos = 0xffffffff
 
 		# Add to subclass database.
-		subclass_db += struct.pack('<BBI', (pci_subclass >> 16) & 0xff, pci_subclass & 0xff, string_db_pos)
+		subclass_db += struct.pack('<BBI', (pci_subclass >> 8) & 0xff, pci_subclass & 0xff, string_db_pos)
 		subclass_has_termination = pci_subclass == 0xffff
 
 	# Enumerate progif IDs.

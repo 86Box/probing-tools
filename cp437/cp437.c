@@ -56,7 +56,7 @@ main(int argc, char **argv)
     if (argc < 2) {
 	printf("Usage:\n");
 	printf("\n");
-	printf("cp437 infile [infile...]\n");
+	printf("%s infile [infile...]\n", argv[0]);
 	printf("- Converts UTF-8 input file(s) to CP437 output file(s) with .cp437 appended.\n");
 	printf("  The new file names are also printed to stdout.\n");
 	return 1;

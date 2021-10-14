@@ -15,13 +15,20 @@
 #
 #                Copyright 2021 RichardG.
 #
-import re, urllib.request
+import io, re, urllib.request
 
 clean_device_abbr = [
+	# Generic patterns to catch extended abbreviations: "Abbreviated Terms (AT)"
+	('([A-Z])[^\s]+ ([A-Z])[^\s]+ (?:\(|\[|\{|/)\\2\\3(?:$|\)|\]|\})', '\\2\\3'),
+	('([A-Z])[^\s]+ ([A-Z])[^\s]+ ([A-Z])[^\s]+ (?:\(|\[|\{|/)\\2\\3\\4(?:$|\)|\]|\})', '\\2\\3\\4'),
+	('([A-Z])[^\s]+ ([A-Z])[^\s]+ ([A-Z])[^\s]+ ([A-Z])[^\s]+ (?:\(|\[|\{|/)\\2\\3\\4\\5(?:$|\)|\]|\})', '\\2\\3\\4\\5'),
+
+	# Manual patterns
 	('100Base-TX?', 'FE'),
 	('1000Base-T', 'GbE'),
 	('Accelerat(?:ion|or)', 'Accel.'),
 	('Alert on LAN', 'AoL'),
+	('\((.+) applications?\)', '\\2'), # 8086:105e
 	('Chipset Family', 'Chipset'),
 	('Chipset Graphics', 'iGPU'),
 	('Connection', 'Conn.'),
@@ -61,9 +68,11 @@ clean_device_abbr = [
 	('Virtual Machine', 'VM'),
 	('Wake on LAN', 'WoL'),
 	('Wireless LAN', 'WLAN'),
+
+	# Generic pattern to remove duplicate abbreviations: "AT (AT)"
+	('([^ \(\[\{/]+) (?: |\(|\[|\{|/)\\2(?: |\)|\]|\})', '\\2'),
 ]
 clean_device_bit_pattern = re.compile('''( |^|\(|\[|\{|/)(?:([0-9]{1,4}) )?(?:(K)(?:ilo)?|(M)(?:ega)?|(G)(?:iga)?)bit( |$|\)|\]|\})''', re.I)
-clean_device_doubleabbr_pattern = re.compile('''( |^|\(|\[|\{|/)([^ \(\[\{/]+) (?: |\(|\[|\{|/)\\2(?: |\)|\]|\})( |$|\)|\]|\})''')
 clean_device_suffix_pattern = re.compile(''' (?:Adapter|Card|Device|(?:Host )?Controller)( (?: [0-9#]+)?|$|\)|\]|\})''', re.I)
 clean_vendor_abbr_pattern = re.compile(''' \[([^\]]+)\]''')
 clean_vendor_suffix_pattern = re.compile(''' (?:Semiconductors?|(?:Micro)?electronics?|Interactive|Technolog(?:y|ies)|(?:Micro)?systems|Computer(?: works)?|Products|Group|and subsidiaries|of(?: America)?|Co(?:rp(?:oration)?|mpany)?|Inc|LLC|Ltd|GmbH|AB|AG|SA|(?:\(|\[|\{).*)$''', re.I)
@@ -106,7 +115,6 @@ def clean_device(device, vendor=None):
 	device = clean_device_bit_pattern.sub('\\1\\2\\3\\4\\5bit\\6', device)
 	for pattern, replace in _clean_device_abbr_cache:
 		device = pattern.sub(replace, device)
-	device = clean_device_doubleabbr_pattern.sub('\\1\\2\\3', device)
 	device = clean_device_suffix_pattern.sub('\\1', device)
 
 	# Remove duplicate vendor ID.
@@ -144,6 +152,43 @@ def clean_vendor(vendor):
 	# Remove duplicate spaces.
 	return ' '.join(vendor.split())
 
+def download_compressed(url, skip_exts=[]):
+	"""Downloads a file which may be available in compressed versions."""
+
+	# Try all files.
+	for ext, module_name in (('.xz', 'lzma'), ('.bz2', 'bz2'), ('.gz', 'gzip'), (None, None)):
+		# Skip extension if requested.
+		if ext in skip_exts:
+			continue
+
+		# Import decompression module if required.
+		if module_name:
+			try:
+				module = __import__(module_name)
+			except:
+				continue
+
+		# Connect to URL.
+		try:
+			f = urllib.request.urlopen(url + (ext or ''), timeout=30)
+		except:
+			# Move on to the next file if the connection failed.
+			continue
+
+		# If this is uncompressed, return the file handle as is.
+		if not module_name:
+			return f
+
+		# Decompress data into a BytesIO object.
+		try:
+			return io.BytesIO(module.decompress(f.read()))
+		except:
+			# Move on to the next file if decompression failed.
+			continue
+
+	# No success with any files.
+	raise FileNotFoundError('All attempts to download "{0}" and variants thereof have failed'.format(url))
+
 def get_pci_id(vendor_id, device_id):
 	"""Get the PCI device vendor and name for vendor_id and device_id."""
 
@@ -163,7 +208,7 @@ def load_pci_db():
 		f = open('/usr/share/misc/pci.ids', 'rb')
 	except:
 		try:
-			f = urllib.request.urlopen('https://pci-ids.ucw.cz/v2.2/pci.ids', timeout=30)
+			f = download_compressed('https://pci-ids.ucw.cz/v2.2/pci.ids', ['.xz'])
 		except:
 			# No sources available.
 			return

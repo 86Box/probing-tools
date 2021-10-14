@@ -1,6 +1,6 @@
 pcireg
 ======
-DOS tool for reading, writing and dumping PCI configuration space registers; scanning the PCI bus; and more.
+DOS and UEFI tool for reading, writing and dumping PCI configuration space registers; scanning the PCI bus; and more.
 
 Usage
 -----
@@ -31,5 +31,11 @@ Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.
 
 Building
 --------
-* **Windows:** Run `build.bat` from an OpenWatcom "Build Environment" command prompt.
-* **Linux:** Run `./build.sh` with OpenWatcom tools present in `$PATH`.
+### DOS target:
+
+* **Windows:** Run `wmake` from an OpenWatcom "Build Environment" command prompt.
+* **Linux:** Run `wmake` with OpenWatcom tools present in `$PATH`.
+
+### UEFI target:
+
+* **Linux:** Run `make -f Makefile.uefi ARCH=x86_64` with a GCC toolchain installed.

@@ -19,15 +19,20 @@
  * │ garbage, please tell your editor to open this file as UTF-8. │
  * └──────────────────────────────────────────────────────────────┘
  */
-#include <dos.h>
-#include <graph.h>
-#include <inttypes.h>
-#include <malloc.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include "wlib.h"
+#ifdef __POSIX_UEFI__
+# include <uefi.h>
+#else
+# include <inttypes.h>
+# include <malloc.h>
+# include <stdio.h>
+# include <stdint.h>
+# include <string.h>
+# include <stdlib.h>
+# ifdef __WATCOMC__
+#  include <dos.h>
+# endif
+#endif
+#include "clib.h"
 
 
 static const char *command_flags[] = {
@@ -74,44 +79,46 @@ static const char *devsel[] = {
 };
 
 
-static struct videoconfig vc;
-static union REGPACK rp; /* things break if this is not a global variable... */
+#ifdef __WATCOMC__
+static union REGPACK rp;
+#endif
+static int term_width;
 static FILE *pciids_f = NULL;
 
 #pragma pack(push, 0)
-static struct {
+static struct PACKED {
     uint32_t	device_db_offset,
-    		subdevice_db_offset,
+		subdevice_db_offset,
 		class_db_offset,
 		subclass_db_offset,
 		progif_db_offset,
 		string_db_offset;
 } pciids_header;
-static struct {
+static struct PACKED {
     uint16_t	vendor_id;
     uint32_t	devices_offset,
-    		string_offset;
+		string_offset;
 } pciids_vendor;
-static struct {
+static struct PACKED {
     uint16_t	device_id;
     uint32_t	subdevices_offset,
 		string_offset;
 } pciids_device;
-static struct {
+static struct PACKED {
     uint16_t	subvendor_id,
 		subdevice_id;
     uint32_t	string_offset;
 } pciids_subdevice;
-static struct {
+static struct PACKED {
     uint8_t	class_id;
     uint32_t	string_offset;
 } pciids_class;
-static struct {
+static struct PACKED {
     uint8_t	class_id,
 		subclass_id;
     uint32_t	string_offset;
 } pciids_subclass;
-static struct {
+static struct PACKED {
     uint8_t	class_id,
 		subclass_id,
 		progif_id;
@@ -119,6 +126,7 @@ static struct {
 } pciids_progif;
 
 
+# if defined(__WATCOMC__) && !defined(M_I386)
 typedef struct {
     uint8_t bus, dev;
     struct {
@@ -134,6 +142,7 @@ typedef struct {
 	irq_routing_entry_t entry[1];
     };
 } irq_routing_table_t;
+# endif
 #pragma pack(pop)
 
 
@@ -160,6 +169,8 @@ static char *
 pciids_read_string(uint32_t offset)
 {
     uint8_t length, *buf;
+    uint32_t sum;
+    int i;
 
     /* Return nothing if the string offset is invalid. */
     if (offset == 0xffffffff)
@@ -170,7 +181,7 @@ pciids_read_string(uint32_t offset)
 	return NULL;
 
     /* Seek to string offset. */
-    fseek(pciids_f, pciids_header.string_db_offset + offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.string_db_offset + offset);
 
     /* Read string length, and return nothing if it's an empty string. */
     fread(&length, sizeof(length), 1, pciids_f);
@@ -198,7 +209,7 @@ pciids_find_vendor(uint16_t vendor_id)
 	return 0;
 
     /* Seek to vendor database. */
-    fseek(pciids_f, sizeof(pciids_header), SEEK_SET);
+    fseek_to(pciids_f, sizeof(pciids_header));
 
     /* Read vendor entries until the ID is matched or overtaken. */
     do {
@@ -233,7 +244,7 @@ pciids_get_device(uint16_t device_id)
 	return NULL;
 
     /* Seek to device database entries for the established vendor. */
-    fseek(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset);
 
     /* Read device entries until the ID is matched or overtaken. */
     do {
@@ -260,7 +271,7 @@ pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
 	return NULL;
 
     /* Seek to subdevice database entries for the established subvendor. */
-    fseek(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset);
 
     /* Read subdevice entries until the ID is matched or overtaken. */
     do {
@@ -285,7 +296,7 @@ pciids_get_class(uint8_t class_id)
 	return NULL;
 
     /* Seek to class database. */
-    fseek(pciids_f, pciids_header.class_db_offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.class_db_offset);
 
     /* Read class entries until the ID is matched or overtaken. */
     do {
@@ -310,7 +321,7 @@ pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
 	return NULL;
 
     /* Seek to subclass database. */
-    fseek(pciids_f, pciids_header.subclass_db_offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.subclass_db_offset);
 
     /* Read subclass entries until the ID is matched or overtaken. */
     do {
@@ -335,7 +346,7 @@ pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
 	return NULL;
 
     /* Seek to programming interface database. */
-    fseek(pciids_f, pciids_header.progif_db_offset, SEEK_SET);
+    fseek_to(pciids_f, pciids_header.progif_db_offset);
 
     /* Read programming interface entries until the ID is matched or overtaken. */
     do {
@@ -355,7 +366,7 @@ pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
 static int
 dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 {
-    int i, width, infobox, flags, bar_id;
+    int i, width, flags, bar_id;
     char buf[13];
     uint8_t cur_reg, regs[256], dev_type, bar_reg;
     multi_t reg_val;
@@ -366,6 +377,9 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 
     /* Generate dump file name. */
     sprintf(buf, "PCI%02X%02X%d.BIN", bus, dev, func);
+
+    /* Get terminal size. */
+    term_width = term_get_size_x();
 
     /* Size character '.' indicates a quiet dump for scan_bus. */
     if (sz != '.') {
@@ -378,7 +392,7 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 	switch (sz) {
 		case 'd':
 		case 'l':
-			width = 68; /* width for register + infobox display */
+			width = 40;
 			for (i = 0x0; i <= 0xf; i += 4) {
 				/* Add spacing at the halfway point. */
 				if (i == 0x8)
@@ -388,7 +402,7 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 			break;
 
 		case 'w':
-			width = 72;
+			width = 44;
 			for (i = 0x0; i <= 0xf; i += 2) {
 				if (i == 0x8)
 					putchar(' ');
@@ -397,7 +411,7 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 			break;
 
 		default:
-			width = 80;
+			width = 52;
 			for (i = 0x0; i <= 0xf; i++) {
 				if (i == 0x8)
 					putchar(' ');
@@ -406,26 +420,12 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 			break;
 	}
 
-	/* Get terminal size. */
-	_getvideoconfig(&vc);
-
-	/* Print top of infobox if we're doing an infobox. */
-	infobox = (start_reg < 0x3c) && (vc.numtextcols >= width);
-	if (infobox) {
-		printf("  ┌");
-		for (i = 0; i < 24; i++)
-			putchar('─');
-		putchar('┐');
-		if (vc.numtextcols > width)
-			putchar('\n');
-	} else {
+	/* Move on to the next line if the terminal didn't already do that for us. */
+	if (width < term_width)
 		putchar('\n');
-	}
     } else {
 	/* Print dump file name now. */
 	printf("Dumping registers to %s", buf);
-
-	infobox = 0;
     }
 
     cur_reg = 0;
@@ -498,229 +498,10 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 		cur_reg += 4;
 	} while (cur_reg & 0x0f);
 
-	/* Print infobox line if we're doing an infobox. */
-	if (infobox) {
-		/* Print left line, unless this is the bottom row. */
-		if (cur_reg)
-			printf("  │ ");
-
-		/* Generate infobox lines, always checking if we have read the corresponding register(s). */
-		switch (cur_reg) {
-			case 0x10:
-				/* Print class ID. */
-				if (start_reg < 0x0c)
-					printf("    Class: %02X Base    ", regs[0x0b]);
-				else
-					goto blank;
-				break;
-
-			case 0x20:
-				/* Print subclass ID. */
-				if (start_reg < 0x0c)
-					printf("           %02X Sub     ", regs[0x0a]);
-				else
-					goto blank;
-				break;
-
-			case 0x30:
-				/* Print programming interface ID. */
-				if (start_reg < 0x0c)
-					printf("           %02X ProgIntf", regs[0x09]);
-				else
-					goto blank;
-				break;
-
-			case 0x40:
-				flags = (start_reg < 0x02) | ((start_reg < 0x2e) << 1);
-				if (flags) {
-					printf("Vendor ID: ");
-
-					/* Print vendor ID. */
-					if (flags & 1)
-						printf("%04X", *((uint16_t *) &regs[0x00]));
-					else
-						printf("----");
-
-					/* Print subvendor ID. */
-					if (flags & 2)
-						printf(" (%04X)", *((uint16_t *) &regs[0x2c]));
-					else
-						printf(" (----)");
-				} else {
-					goto blank;
-				}
-				break;
-
-			case 0x50:
-				flags = (start_reg < 0x04) | ((start_reg < 0x30) << 1);
-				if (flags) {
-					printf("Device ID: ");
-
-					/* Print device ID. */
-					if (flags & 1)
-						printf("%04X", *((uint16_t *) &regs[0x02]));
-					else
-						printf("----");
-
-					/* Print subdevice ID. */
-					if (flags & 2)
-						printf(" (%04X)", *((uint16_t *) &regs[0x2e]));
-					else
-						printf(" (----)");
-				} else {
-					goto blank;
-				}
-				break;
-
-			case 0x60:
-				/* Print revision. */
-				if (start_reg < 0x09)
-					printf(" Revision: %02X         ", regs[0x08]);
-				else
-					goto blank;
-				break;
-
-			case 0x70:
-				/* No IRQ on bridges. */
-				if (regs[0x0e] & 0x7f)
-					goto blank;
-
-				flags  =  regs[0x3c] && (regs[0x3c] != 0xff);
-				flags |= (regs[0x3d] && (regs[0x3d] != 0xff)) << 1;
-				if (flags) {
-					printf("      IRQ: ");
-
-					/* Print IRQ number. */
-					if (flags & 1)
-						printf("%2d", regs[0x3c] & 15);
-					else
-						printf("--");
-
-					/* Print INTx# line. */
-					if (flags & 2)
-						printf(" (INT%c)  ", '@' + (regs[0x3d] & 15));
-					else
-						printf("         ");
-				} else {
-					goto blank;
-				}
-				break;
-
-			case 0x80:
-				/* Print separator for the BAR section. */
-blank:
-				printf("                      ");
-				break;
-
-			case 0x90:
-			case 0xa0:
-			case 0xb0:
-			case 0xc0:
-			case 0xd0:
-			case 0xe0:
-				/* We must know the device type before printing BARs. */
-				if (start_reg > 0x0e)
-					goto blank;
-
-				/* Determine device type and current BAR register. */
-				dev_type = regs[0x0e] & 0x7f;
-				bar_reg = (cur_reg >> 2) - 0x14;
-
-				/* Bridges have special BAR2+ handling. */
-				if ((dev_type == 0x01) && (bar_reg > 0x14)) {
-					/* Print bridge I/O and memory ranges. */
-					switch (bar_reg) {
-						case 0x18:
-							if (start_reg < 0x1d)
-								printf(" Brdg I/O: %X000-%XFFF  ", regs[0x1c] >> 4, regs[0x1d] >> 4);
-							else
-								goto blank;
-							break;
-
-						case 0x1c:
-							if (start_reg < 0x21)
-								printf(" Brdg Mem: %03X00000-  ", *((uint16_t *) &regs[0x20]) >> 4);
-							else
-								goto blank;
-							break;
-
-						case 0x20:
-							if (start_reg < 0x21)
-								printf("           %03XFFFFF   ", *((uint16_t *) &regs[0x22]) >> 4);
-							else
-								goto blank;
-							break;
-
-						default:
-							goto blank;
-					}
-					break;
-				} else if (dev_type > 0x01) {
-					/* We don't parse CardBus bridges or other header types. */
-					goto blank;
-				}
-
-				/* Print BAR0-5 for regular devices, or BAR0-1 for bridges. */
-				reg_val.u32 = *((uint32_t *) &regs[bar_reg]);
-				if ((start_reg <= bar_reg) && reg_val.u32 && (reg_val.u32 != 0xffffffff)) {
-					bar_id = (bar_reg - 0x10) >> 2;
-					if (reg_val.u8[0] & 0x01)
-						printf("I/O BAR %d: %04X       ", bar_id, reg_val.u16[0] & 0xfffc);
-					else
-						printf("Mem BAR %d: %04X%04X   ", bar_id, reg_val.u16[1], reg_val.u16[0] & 0xfff0);
-				} else {
-					goto blank;
-				}
-				break;
-
-			case 0xf0:
-				/* Print expansion ROM BAR. */
-				switch (regs[0x0e] & 0x7f) {
-					case 0x00:
-						if (start_reg < 0x31)
-							reg_val.u32 = *((uint32_t *) &regs[0x30]);
-						else
-							reg_val.u32 = 0;
-						break;
-
-					case 0x01:
-						if (start_reg < 0x39)
-							reg_val.u32 = *((uint32_t *) &regs[0x38]);
-						else
-							reg_val.u32 = 0;
-						break;
-
-					default:
-						reg_val.u32 = 0;
-						break;
-				}
-				if (reg_val.u32 && (reg_val.u32 != 0xffffffff))
-					printf("  Exp ROM: %04X%04X   ", reg_val.u16[1], reg_val.u16[0]);
-				else
-					goto blank;
-				break;
-
-			case 0x00:
-				/* Print bottom of infobox. */
-				printf("  └");
-				for (i = 0; i < 24; i++)
-					printf("─");
-				printf("\xd9");
-				if (vc.numtextcols > 80)
-					printf("\n");
-				break;
-		}
-
-		/* Print right line, unless this is the bottom row. */
-		if (cur_reg)
-			printf(" │");
-
+	if (sz != '.') {
 		/* Move on to the next line if the terminal didn't already do that for us. */
-		if (vc.numtextcols > width)
-			printf("\n");
-	} else if (sz != '.') {
-		/* Move on to the next line. */
-		printf("\n");
+		if (width < term_width)
+			putchar('\n');
 	}
     } while (cur_reg);
 
@@ -759,7 +540,7 @@ blank:
 
 
 static int
-scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
+scan_bus(uint8_t bus, int nesting, char dump, char *buf)
 {
     int i, j, count, last_count, children;
     char *temp;
@@ -787,11 +568,11 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 		if (dev_id.u32 && (dev_id.u32 != 0xffffffff)) {
 			/* Clear vendor/device name buffer while adding nested bus spacing if required. */
 			if (nesting) {
-				j = (nesting << 1) - 1;
-				memset(buf, ' ', j);
-				buf[j - 1] = '└';
-				buf[j] = '─';
-				buf[j + 1] = '\0';
+				j = (nesting << 1) - 2;
+				for (i = 0; i < j; i++)
+					buf[i] = ' ';
+				buf[i] = '\0';
+				sprintf(&buf[strlen(buf)], "└─");
 			} else {
 				buf[0] = '\0';
 			}
@@ -831,7 +612,7 @@ scan_bus(uint8_t bus, int nesting, char dump, FILE *f, char *buf)
 				strcat(buf, "[Unknown] ");
 
 unknown_device:			/* Look up class ID. */
-				temp = pciids_get_class(dev_rev_class.u16[1]);
+				temp = pciids_get_subclass(dev_rev_class.u8[3], dev_rev_class.u8[2]);
 				if (temp) {
 					/* Add class name to buffer. */
 					sprintf(&buf[strlen(buf)], "[%s]", temp);
@@ -843,52 +624,41 @@ unknown_device:			/* Look up class ID. */
 			}
 
 			/* Limit buffer to screen width, then print it with the revision ID. */
-			i = vc.numtextcols - strlen(buf) - 24;
+			i = term_width - strlen(buf) - 24;
 			if (i >= 9) {
 				sprintf(&buf[strlen(buf)], " (rev %02X)", dev_rev_class.u8[0]);
 			} else {
 				if (i >= 5)
 					strcat(buf, " ");
 				else if (i < 4)
-					strcpy(&buf[vc.numtextcols - 32], "... ");
+					strcpy(&buf[term_width - 32], "... ");
 				sprintf(&buf[strlen(buf)], "(%02X)", dev_rev_class.u8[0]);
 			}
 			printf(buf);
 
 			/* Move on to the next line if the terminal didn't already do that for us. */
-			if (vc.numtextcols > (strlen(buf) + 24))
+			if (term_width > (strlen(buf) + 24))
 				putchar('\n');
 
-			if (nesting && count) {
-				/* Get the current cursor position. */
-				rp.h.ah = 0x03;
-				rp.h.bh = 0x00;
-				intr(0x10, &rp);
-				row = rp.h.dh;
-				column = rp.h.dl;
-
-				/* Rectify previous nesting indicator. */
-				rp.h.ah = 0x02;
-				rp.h.dl = 22 + (nesting << 1);
-				rp.h.dh -= 2;
-				if (children > rp.h.dh)
-					children = rp.h.dh;
+			/* Rectify previous nesting indicator when nesting buses. */
+			if (nesting && count && term_get_cursor_pos(&column, &row)) {
+				i = 22 + (nesting << 1);
+				j = row - 2;
+				if (children > j)
+					children = j;
 				while (children) {
-					intr(0x10, &rp);
-					putchar('│');
+					term_set_cursor_pos(i, j);
+					printf("│");
 					children--;
-					rp.h.dh--;
+					j--;
 				}
-				if (rp.h.dh != 0xff) {
-					intr(0x10, &rp);
-					putchar('├');
+				if (j != 0xff) {
+					term_set_cursor_pos(i, j);
+					printf("├");
 				}
 
 				/* Restore cursor position. */
-				rp.h.ah = 0x02;
-				rp.h.dh = row;
-				rp.h.dl = column;
-				intr(0x10, &rp);
+				term_set_cursor_pos(column, row);
 			}
 
 			/* Dump registers if requested. */
@@ -922,7 +692,7 @@ unknown_device:			/* Look up class ID. */
 #endif
 
 			/* Scan the secondary bus. */
-			children = scan_bus(new_bus, nesting + 1, dump, f, buf);
+			children = scan_bus(new_bus, nesting + 1, dump, buf);
 			count += children;
 		} else {
 			children = 0;
@@ -943,27 +713,24 @@ scan_buses(char dump)
 {
     int i;
     char *buf;
-    FILE *f;
 
     /* Initialize buffers. */
     buf = malloc(1024);
     memset(buf, 0, 1024);
 
     /* Get terminal size. */
-    _getvideoconfig(&vc);
+    term_width = term_get_size_x();
 
     /* Print header. */
-    printf("Bus Dev Fun [Vend:Dev ] Device\n");
-    for (i = 0; i < vc.numtextcols; i++)
-	putchar('─');
+    printf("Bus Dev Fun [VeID:DeID] Device\n");
+    for (i = 0; i < term_width; i++)
+	printf("─");
 
     /* Scan the root bus. */
-    scan_bus(0, 0, dump, f, buf);
+    scan_bus(0, 0, dump, buf);
 
     /* Clean up. */
     free(buf);
-    if (f)
-	fclose(f);
 
     return 0;
 }
@@ -978,9 +745,9 @@ info_flags_helper(uint16_t bitfield, const char **table)
     /* Check each bit. */
     j = 0;
     for (i = 0; i < 16; i++) {
-    	/* Ignore if there is no table entry. */
-    	if (!table[i])
-    		continue;
+	/* Ignore if there is no table entry. */
+	if (!table[i])
+		continue;
 
 	/* Print flag name in [brackets] if set. */
 	if (bitfield & (1 << i))
@@ -988,11 +755,11 @@ info_flags_helper(uint16_t bitfield, const char **table)
 	else
 		printf("  %s ", table[i]);
 
-    	/* Add line break and indentation after the 7th item. */
-    	if (++j == 7) {
-    		printf("\n        ");
-    		j = 0;
-    	}
+	/* Add line break and indentation after the 7th item. */
+	if (++j == 7) {
+		printf("\n        ");
+		j = 0;
+	}
     }
 }
 
@@ -1117,7 +884,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     printf("\n\nRevision: %02X", reg_val.u8[0]);
 
     /* Print class ID. */
-    printf("\n\nClass: [%02X] ", reg_val.u8[3]);
+    printf("\nClass: [%02X] ", reg_val.u8[3]);
 
     /* Print class name if found. */
     temp = pciids_get_class(reg_val.u8[3]);
@@ -1129,7 +896,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     }
 
     /* Print subclass ID. */
-    printf("\n       [%02X] ");
+    printf("\n       [%02X] ", reg_val.u8[2]);
 
     /* Print subclass name if found. */
     temp = pciids_get_subclass(reg_val.u8[3], reg_val.u8[2]);
@@ -1141,7 +908,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     }
 
     /* Print programming interface ID. */
-    printf("\n       [%02X] ");
+    printf("\n       [%02X] ", reg_val.u8[1]);
 
     /* Print programming interface name if found. */
     temp = pciids_get_progif(reg_val.u8[3], reg_val.u8[2], reg_val.u8[1]);
@@ -1152,27 +919,61 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 	printf("[Unknown]");
     }
 
+    /* Read latency, grant and interrupt line. */
+    reg_val.u32 = pci_readl(bus, dev, func, 0x3c);
+
+    /* Print interrupt if present. */
+    if (reg_val.u16[0] && (reg_val.u16[0] != 0xffff))
+	printf("\nInterrupt: INT%c (IRQ %d)", '@' + (reg_val.u8[1] & 15), reg_val.u8[0] & 15);
+
+    /* Print latency and grant if available. */
+    if ((header_type & 0x7f) == 0x00) {
+	printf("\nMin Grant: %.0f us at 33 MHz", reg_val.u8[2] * 0.25);
+	printf("\nMax Latency: %.0f us at 33 MHz", reg_val.u8[3] * 0.25);
+    }
+
     /* Read and print BARs. */
     for (i = 0; i < num_bars; i++) {
-    	if (i == 0)
-    		putchar('\n');
+	if (i == 0)
+		putchar('\n');
 
-    	/* Read BAR. */
-    	reg_val.u32 = pci_readl(bus, dev, func, 0x10 + (i << 2));
+	/* Read BAR. */
+	reg_val.u32 = pci_readl(bus, dev, func, 0x10 + (i << 2));
 
-    	/* Move on to the next BAR if this one doesn't appear to be valid. */
-    	if (!reg_val.u32 || (reg_val.u32 == 0xffffffff))
-    		continue;
+	/* Move on to the next BAR if this one doesn't appear to be valid. */
+	if (!reg_val.u32 || (reg_val.u32 == 0xffffffff))
+		continue;
 
-    	/* Print BAR index. */
-    	printf("\nBAR %d: ", i);
+	/* Print BAR index. */
+	printf("\nBAR %d: ", i);
 
-    	/* Print BAR type and address. */
-    	if (i & 1)
-    		printf("I/O at %04X", reg_val.u16[0] & 0xfffc);
-    	else
-    		printf("Memory at %04X%04X", reg_val.u16[1], reg_val.u16[0] & 0xfff0);
+	/* Print BAR type, address and properties. */
+	if (reg_val.u8[0] & 1) {
+		printf("I/O at %04X", reg_val.u16[0] & 0xfffc);
+	} else {
+		printf("Memory at %04X%04X (", reg_val.u16[1], reg_val.u16[0] & 0xfff0);
+		switch (reg_val.u8[0] & 0x06) {
+			case 0x00:
+				printf("32-bit");
+				break;
 
+			case 0x02:
+				printf("below 1 MB");
+				break;
+
+			case 0x04:
+				printf("64-bit");
+				break;
+
+			case 0x06:
+				printf("invalid location");
+				break;
+		}
+		printf(", ");
+		if (!(reg_val.u8[0] & 0x08))
+			printf("not ");
+		printf("prefetchable)");
+	}
     }
 
     printf("\n");
@@ -1181,6 +982,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 }
 
 
+#if defined(__WATCOMC__) && !defined(M_I386)
 static int
 comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
@@ -1240,7 +1042,7 @@ retry_buf:
     }
 
     /* Get terminal size. */
-    _getvideoconfig(&vc);
+    term_width = term_get_size_x();
 
     /* Start output according to the selected mode. */
     if (mode == '8') {
@@ -1321,7 +1123,7 @@ retry_buf:
 	printf("┌ Location ─┐┌ INT Lines ┐┌ Steerable IRQs ───────── (INTA=1 B=2 C=4 D=8) ┐\n");
 	printf("│Slt Bus Dev││A1 B2 C3 D4││ 0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15│\n");
 	printf("┴───────────┴┴───────────┴┴───────────────────────────────────────────────┴");
-	for (i = 75; i < vc.numtextcols; i++)
+	for (i = 75; i < term_width; i++)
 		putchar('─');
     }
 
@@ -1414,6 +1216,7 @@ next_entry:
 
     return 0;
 }
+#endif
 
 
 static int
@@ -1454,7 +1257,7 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 	case 1:
 	case 2:
 		/* Byte input value. */
-		sscanf(val, "%" SCNx8, &reg_val.u8[0]);
+		parse_hex_u8(val, &reg_val.u8[0]);
 
 		/* Print banner message. */
 		printf("Writing %02X to PCI bus %02X device %02X function %d register [%02X]\n",
@@ -1479,7 +1282,7 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 	case 3:
 	case 4:
 		/* Word input value. */
-		sscanf(val, "%" SCNx16, &reg_val.u16[0]);
+		parse_hex_u16(val, &reg_val.u16[0]);
 
 		/* Print banner message. */
 		printf("Writing %04X to PCI bus %02X device %02X function %d registers [%02X:%02X]\n",
@@ -1505,7 +1308,7 @@ write_reg(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, char *val)
 
 	default:
 		/* Dword input value. */
-		sscanf(val, "%" SCNx32, &reg_val.u32);
+		parse_hex_u32(val, &reg_val.u32);
 
 		/* Print banner message. */
 		printf("Writing %04X%04X to PCI bus %02X device %02X function %d registers [%02X:%02X]\n",
@@ -1538,40 +1341,45 @@ int
 main(int argc, char **argv)
 {
     int hexargc, i;
-    char *ch, nonhex;
+    char *ch;
     uint8_t hexargv[8], bus, dev, func, reg;
     uint32_t cf8;
 
+#ifdef __WATCOMC__
     /* Disable stdout buffering. */
     setbuf(stdout, NULL);
+#endif
 
     /* Print usage if there are too few parameters or if the first one looks invalid. */
     if ((argc <= 1) || (strlen(argv[1]) < 2) || ((argv[1][0] != '-') && (argv[1][0] != '/'))) {
 usage:
 	printf("Usage:\n");
 	printf("\n");
-	printf("PCIREG -s [-d]\n");
+	printf("%s -s [-d]\n", argv[0]);
 	printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
+#ifdef __WATCOMC__
 	printf("\n");
-	printf("PCIREG -t [-8]\n");
+	printf("%s -t [-8]\n", argv[0]);
 	printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
+#endif
 	printf("\n");
-	printf("PCIREG -i [bus] device [function]\n");
+	printf("%s -i [bus] device [function]\n", argv[0]);
 	printf("∟ Show information about the specified device.\n");
 	printf("\n");
-	printf("PCIREG -r [bus] device [function] register\n");
+	printf("%s -r [bus] device [function] register\n", argv[0]);
 	printf("∟ Read the specified register.\n");
 	printf("\n");
-	printf("PCIREG -w [bus] device [function] register value\n");
+	printf("%s -w [bus] device [function] register value\n", argv[0]);
 	printf("∟ Write byte, word or dword to the specified register.\n");
 	printf("\n");
-	printf("PCIREG {-d|-dw|-dl} [bus] device [function [register]]\n");
+	printf("%s {-d|-dw|-dl} [bus] device [function [register]]\n", argv[0]);
 	printf("∟ Dump registers as bytes (-d), words (-dw) or dwords (-dl). Optionally\n");
 	printf("  specify the register to start from (requires bus to be specified as well).\n");
 	printf("\n");
 	printf("All numeric parameters should be specified in hexadecimal (without 0x prefix).\n");
 	printf("{bus device function register} can be substituted for a single port CF8h dword.\n");
 	printf("Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.");
+	term_finallinebreak();
 	return 1;
     }
 
@@ -1600,16 +1408,19 @@ usage:
 		return scan_buses(argv[2][1]);
 	else
 		return scan_buses('\0');
-    } else if (argv[1][1] == 't') {
+    }
+#if defined(__WATCOMC__) && !defined(M_I386)
+    else if (argv[1][1] == 't') {
 	/* Steering table display only requires a single optional parameter. */
 	if ((argc >= 3) && (strlen(argv[2]) > 1))
 		return dump_steering_table(argv[2][1]);
 	else
 		return dump_steering_table('\0');
-    } else if ((argc >= 3) && (strlen(argv[1]) > 1)) {
+    }
+#endif
+    else if ((argc >= 3) && (strlen(argv[1]) > 1)) {
 	/* Read second parameter as a dword. */
-	nonhex = 0;
-	if (sscanf(argv[2], "%" SCNx32 "%c", &cf8, &nonhex) && !nonhex) {
+	if (parse_hex_u32(argv[2], &cf8)) {
 		/* Initialize default bus/device/function/register values. */
 		bus = dev = func = reg = 0;
 
@@ -1625,8 +1436,7 @@ usage:
 
 		/* Read parameters until the end is reached or an invalid hex value is found. */
 		for (i = 3; (i < argc) && (i < (sizeof(hexargv) - 1)); i++) {
-			nonhex = 0;
-			if (!sscanf(argv[i], "%" SCNx8 "%s", &hexargv[hexargc++], &nonhex) || nonhex)
+			if (!parse_hex_u8(argv[i], &hexargv[hexargc++]))
 				break;
 		}
 	} else {
@@ -1705,6 +1515,7 @@ usage:
 				break;
 
 			default:
+				printf("unknown hexargc %d\n", hexargc);
 				goto usage;
 		}
 

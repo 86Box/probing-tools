@@ -65,7 +65,8 @@ extern int	term_get_size_x();
 extern int	term_get_size_y();
 extern int	term_get_cursor_pos(uint8_t *x, uint8_t *y);
 extern int	term_set_cursor_pos(uint8_t x, uint8_t y);
-extern void	term_finallinebreak();
+extern void	term_unbuffer_stdout();
+extern void	term_final_linebreak();
 
 /* Port I/O functions. */
 #ifdef __WATCOMC__

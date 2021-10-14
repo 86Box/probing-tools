@@ -163,7 +163,14 @@ term_set_cursor_pos(uint8_t x, uint8_t y)
 
 
 void
-term_finallinebreak()
+term_unbuffer_stdout()
+{
+    setbuf(stdout, NULL);
+}
+
+
+void
+term_final_linebreak()
 {
     /* DOS already outputs a final line break. */
 }
@@ -197,7 +204,13 @@ term_set_cursor_pos(uint8_t x, uint8_t y)
 
 
 void
-term_finallinebreak()
+term_unbuffer_stdout()
+{
+}
+
+
+void
+term_final_linebreak()
 {
     printf("\n");
 }

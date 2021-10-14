@@ -79,11 +79,11 @@ static const char *devsel[] = {
 };
 
 
-#ifdef __WATCOMC__
-static union REGPACK rp;
-#endif
 static int term_width;
 static FILE *pciids_f = NULL;
+#if defined(__WATCOMC__) && !defined(M_I386)
+static union REGPACK rp;
+#endif
 
 #pragma pack(push, 0)
 static struct PACKED {
@@ -1345,10 +1345,8 @@ main(int argc, char **argv)
     uint8_t hexargv[8], bus, dev, func, reg;
     uint32_t cf8;
 
-#ifdef __WATCOMC__
     /* Disable stdout buffering. */
-    setbuf(stdout, NULL);
-#endif
+    term_unbuffer_stdout();
 
     /* Print usage if there are too few parameters or if the first one looks invalid. */
     if ((argc <= 1) || (strlen(argv[1]) < 2) || ((argv[1][0] != '-') && (argv[1][0] != '/'))) {
@@ -1357,7 +1355,7 @@ usage:
 	printf("\n");
 	printf("%s -s [-d]\n", argv[0]);
 	printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
-#ifdef __WATCOMC__
+#if defined(__WATCOMC__) && !defined(M_I386)
 	printf("\n");
 	printf("%s -t [-8]\n", argv[0]);
 	printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
@@ -1379,7 +1377,7 @@ usage:
 	printf("All numeric parameters should be specified in hexadecimal (without 0x prefix).\n");
 	printf("{bus device function register} can be substituted for a single port CF8h dword.\n");
 	printf("Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.");
-	term_finallinebreak();
+	term_final_linebreak();
 	return 1;
     }
 

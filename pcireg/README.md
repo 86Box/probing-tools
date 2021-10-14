@@ -10,6 +10,7 @@ PCIREG -s [-d]
 
 PCIREG -t [-8]
 ∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.
+  (Not available in UEFI version)
 
 PCIREG -i [bus] device [function]
 ∟ Show information about the specified device.
@@ -31,11 +32,11 @@ Register dumps are saved to PCIbbddf.BIN where bb=bus, dd=device, f=function.
 
 Building
 --------
-### DOS target:
+### DOS target
 
 * **Windows:** Run `wmake` from an OpenWatcom "Build Environment" command prompt.
 * **Linux:** Run `wmake` with OpenWatcom tools present in `$PATH`.
 
-### UEFI target:
+### UEFI target
 
 * **Linux:** Run `make -f Makefile.uefi ARCH=x86_64` with a GCC toolchain installed.

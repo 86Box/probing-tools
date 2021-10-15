@@ -30,6 +30,11 @@
 # define PACKED
 #endif
 
+/* Platform-specific macros. */
+#ifndef __POSIX_UEFI__
+# define FMT_FLOAT_SUPPORTED	1
+#endif
+
 
 #pragma pack(push, 0)
 /* Convenience type for breaking a dword value down into words and bytes. */

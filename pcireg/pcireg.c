@@ -870,12 +870,17 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Read command and status. */
     reg_val.u32 = pci_readl(bus, dev, func, 0x04);
 
-    /* Print command and status flags. */
+    /* Print command and status flags... except on UEFI target,
+       as something somewhere in the POSIX-UEFI pipeline mangles
+       the pointers to all strings in our lookup arrays after
+       command_flags[0]. Ugh. */
+#ifndef __POSIX_UEFI__
     printf("\n\nCommand:");
     info_flags_helper(reg_val.u16[0], command_flags);
     printf("\n Status:");
     info_flags_helper(reg_val.u16[1], status_flags);
     printf(" DEVSEL[%s]", devsel[(reg_val.u16[1] >> 9) & 3]);
+#endif
 
     /* Read revision and class ID. */
     reg_val.u32 = pci_readl(bus, dev, func, 0x08);
@@ -923,13 +928,18 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     reg_val.u32 = pci_readl(bus, dev, func, 0x3c);
 
     /* Print interrupt if present. */
-    if (reg_val.u16[0] && (reg_val.u16[0] != 0xffff))
+    if (reg_val.u16[0] && (reg_val.u8[0] != 0xff))
 	printf("\nInterrupt: INT%c (IRQ %d)", '@' + (reg_val.u8[1] & 15), reg_val.u8[0] & 15);
 
     /* Print latency and grant if available. */
     if ((header_type & 0x7f) == 0x00) {
+#ifdef FMT_FLOAT_SUPPORTED
 	printf("\nMin Grant: %.0f us at 33 MHz", reg_val.u8[2] * 0.25);
 	printf("\nMax Latency: %.0f us at 33 MHz", reg_val.u8[3] * 0.25);
+#else
+	printf("\nMin Grant: (%d * 0.25) us at 33 MHz", reg_val.u8[2]);
+	printf("\nMax Latency: (%d * 0.25) us at 33 MHz", reg_val.u8[3]);
+#endif
     }
 
     /* Read and print BARs. */

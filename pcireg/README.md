@@ -40,3 +40,9 @@ Building
 ### UEFI target
 
 * **Linux:** Run `make -f Makefile.uefi ARCH=x86_64` with a GCC toolchain installed.
+  * Note that 32-bit UEFI targets are not supported yet.
+
+### PCI ID database
+
+* Run `python3 pciids.py` to update the `PCIIDS.BIN` file.
+  * The latest version of `pci.ids` is automatically downloaded and used to update the database.

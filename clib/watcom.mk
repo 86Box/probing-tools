@@ -55,7 +55,7 @@ CFLAGS		= -bt=$(SYSTEM) $(CFLAGS)
 # Compile source file into object file.
 .c.obj
 !if "$(CP437_CONV)" == "y"
-		@..$(SLASH)cp437$(SLASH)$(CP437) $<
+		..$(SLASH)cp437$(SLASH)$(CP437) $<
 		$(CC) $(CFLAGS) $<_cp437
 		@$(DEL) $<_cp437
 !else

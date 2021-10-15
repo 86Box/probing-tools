@@ -181,7 +181,7 @@ pciids_read_string(uint32_t offset)
 	return NULL;
 
     /* Seek to string offset. */
-    fseek_to(pciids_f, pciids_header.string_db_offset + offset);
+    fseek(pciids_f, pciids_header.string_db_offset + offset, SEEK_SET);
 
     /* Read string length, and return nothing if it's an empty string. */
     fread(&length, sizeof(length), 1, pciids_f);
@@ -209,7 +209,7 @@ pciids_find_vendor(uint16_t vendor_id)
 	return 0;
 
     /* Seek to vendor database. */
-    fseek_to(pciids_f, sizeof(pciids_header));
+    fseek(pciids_f, sizeof(pciids_header), SEEK_SET);
 
     /* Read vendor entries until the ID is matched or overtaken. */
     do {
@@ -244,7 +244,7 @@ pciids_get_device(uint16_t device_id)
 	return NULL;
 
     /* Seek to device database entries for the established vendor. */
-    fseek_to(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset);
+    fseek(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset, SEEK_SET);
 
     /* Read device entries until the ID is matched or overtaken. */
     do {
@@ -271,7 +271,7 @@ pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
 	return NULL;
 
     /* Seek to subdevice database entries for the established subvendor. */
-    fseek_to(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset);
+    fseek(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset, SEEK_SET);
 
     /* Read subdevice entries until the ID is matched or overtaken. */
     do {
@@ -296,7 +296,7 @@ pciids_get_class(uint8_t class_id)
 	return NULL;
 
     /* Seek to class database. */
-    fseek_to(pciids_f, pciids_header.class_db_offset);
+    fseek(pciids_f, pciids_header.class_db_offset, SEEK_SET);
 
     /* Read class entries until the ID is matched or overtaken. */
     do {
@@ -321,7 +321,7 @@ pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
 	return NULL;
 
     /* Seek to subclass database. */
-    fseek_to(pciids_f, pciids_header.subclass_db_offset);
+    fseek(pciids_f, pciids_header.subclass_db_offset, SEEK_SET);
 
     /* Read subclass entries until the ID is matched or overtaken. */
     do {
@@ -346,7 +346,7 @@ pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
 	return NULL;
 
     /* Seek to programming interface database. */
-    fseek_to(pciids_f, pciids_header.progif_db_offset);
+    fseek(pciids_f, pciids_header.progif_db_offset, SEEK_SET);
 
     /* Read programming interface entries until the ID is matched or overtaken. */
     do {
@@ -782,8 +782,8 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 #else
     reg_val.u32 = pci_readl(bus, dev, func, 0x00);
     if (!reg_val.u32 || (reg_val.u32 == 0xffffffff)) {
-	printf("\nNo device appears to exist here. (vendor:device %04X:%04X)",
-	reg_val.u16[0], reg_val.u16[1]);
+	printf("\nNo device appears to exist here. (vendor:device %04X:%04X)\n",
+	       reg_val.u16[0], reg_val.u16[1]);
 	return 1;
     }
 #endif

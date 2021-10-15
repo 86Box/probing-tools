@@ -56,7 +56,7 @@ CFLAGS		= -bt=$(SYSTEM) $(CFLAGS)
 .c.obj
 !if "$(CP437_CONV)" == "y"
 		@..$(SLASH)cp437$(SLASH)$(CP437) $<
-		$(CC) -bt=$(SYSTEM) $(CFLAGS) $<_cp437
+		$(CC) $(CFLAGS) $<_cp437
 		@$(DEL) $<_cp437
 !else
 		$(CC) $(CFLAGS) $<

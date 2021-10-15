@@ -46,12 +46,12 @@ probe_intel(uint8_t dev, uint8_t func)
     scanf("%x%*c", &type);
 
     /* Try sleep through alternate port. */
-    printf("Press ENTER to try sleep %02X through 40...", type);
+    printf("Press ENTER to try sleep %02X through register 40...", type);
     gets(dummy_buf);
     outw(acpi_base | 0x40, 0x2000 | (type << 10));
 
     /* Try sleep through main port. */
-    printf("Nothing?\nPress ENTER to try sleep %02X through 04...", type);
+    printf("Nothing?\nPress ENTER to try sleep %02X through register 04...", type);
     gets(dummy_buf);
     outw(acpi_base | 0x04, 0x2000 | (type << 10));
     printf("Nothing still?\n");
@@ -77,12 +77,12 @@ probe_via(uint8_t dev, uint8_t func, uint8_t is586)
     scanf("%x%*c", &type);
 
     /* Try sleep through alternate port. */
-    printf("Press ENTER to try sleep %02X through F0...", type);
+    printf("Press ENTER to try sleep %02X through register F0...", type);
     gets(dummy_buf);
     outw(acpi_base | 0xf0, 0x2000 | (type << 10));
 
     /* Try sleep through main port. */
-    printf("Nothing?\nPress ENTER to try sleep %02X through 04...", type);
+    printf("Nothing?\nPress ENTER to try sleep %02X through register 04...", type);
     gets(dummy_buf);
     outw(acpi_base | 0x04, 0x2000 | (type << 10));
     printf("Nothing still?\n");

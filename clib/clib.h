@@ -41,6 +41,10 @@ typedef union {
 #pragma pack(pop)
 
 
+/* Global variables. */
+extern uint8_t	pci_mechanism, pci_device_count;
+
+
 /* String functions. */
 extern int	parse_hex_u8(char *val, uint8_t *dest);
 extern int	parse_hex_u16(char *val, uint16_t *dest);
@@ -113,6 +117,7 @@ extern void	outl(uint16_t port, uint32_t data);
 
 /* PCI I/O functions. */
 extern uint32_t	pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern int	pci_init();
 extern uint8_t	pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint16_t	pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint32_t	pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);

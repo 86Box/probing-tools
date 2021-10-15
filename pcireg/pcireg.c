@@ -549,9 +549,9 @@ scan_bus(uint8_t bus, int nesting, char dump, char *buf)
 
     /* Iterate through devices. */
     count = 0;
-    for (dev = 0; dev <= 31; dev++) {
+    for (dev = 0; dev < pci_device_count; dev++) {
 	/* Iterate through functions. */
-	for (func = 0; func <= 7; func++) {
+	for (func = 0; func < 8; func++) {
 		/* Read vendor/device ID. */
 #ifdef DEBUG
 		if ((bus < DEBUG) && (dev <= bus) && (func == 0)) {
@@ -1381,14 +1381,12 @@ usage:
 	return 1;
     }
 
-#ifndef DEBUG
-    /* Test for PCI presence. */
-    outl(0xcf8, 0x80000000);
-    cf8 = inl(0xcf8);
-    if (cf8 == 0xffffffff) {
-	printf("Port CF8h is not responding. Does this system even have PCI?\n");
+#ifdef DEBUG
+    pci_mechanism = 1;
+#else
+    /* Initialize PCI, and exit in case of failure. */
+    if (!pci_init())
 	return 1;
-    }
 #endif
 
     /* Convert the first parameter to lowercase. */

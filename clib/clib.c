@@ -30,6 +30,8 @@
 #include "clib.h"
 
 
+uint8_t		pci_mechanism = 0, pci_device_count = 0;
+
 #ifdef __WATCOMC__
 static union REGPACK rp; /* things break if this is not a global variable... */
 #endif
@@ -323,16 +325,62 @@ pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 }
 
 
+int
+pci_init()
+{
+    multi_t cf8;
+    cf8.u32 = 0x80000000;
+
+    /* Determine the supported PCI configuration mechanism. */
+    cli();
+    outb(0xcf8, 0x00);
+    outb(0xcfa, 0x00);
+    if ((inb(0xcf8) == 0x00) && (inb(0xcfa) == 0x00)) {
+	pci_mechanism = 2;
+	pci_device_count = 32;
+    } else {
+	outl(0xcf8, cf8.u32);
+	cf8.u32 = inl(0xcf8);
+	if (cf8.u32 == 0x80000000) {
+		pci_mechanism = 1;
+		pci_device_count = 16;
+	}
+    }
+    sti();
+    if (pci_mechanism == 0)
+	printf("Failed to probe PCI configuration mechanism (%04X%04X). Is this a PCI system?\n", cf8.u16[1], cf8.u16[0]);
+
+    return pci_mechanism;
+}
+
+
 uint8_t
 pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
     uint8_t ret;
-    uint16_t data_port = 0xcfc | (reg & 0x03);
-    uint32_t cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    ret = inb(data_port);
-    sti();
+    uint16_t data_port;
+    uint32_t cf8;
+
+    switch (pci_mechanism) {
+    	case 1:
+    		data_port = 0xcfc | (reg & 0x03);
+    		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		ret = inb(data_port);
+		sti();
+		break;
+
+	case 2:
+		cf8 = pci_readl(bus, dev, func, reg);
+		ret = cf8 >> ((reg & 0x03) << 3);
+		break;
+
+	default:
+		ret = 0xff;
+		break;
+    }
+
     return ret;
 }
 
@@ -340,12 +388,29 @@ pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 uint16_t
 pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
-    uint16_t ret, data_port = 0xcfc | (reg & 0x02);
-    uint32_t cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    ret = inw(data_port);
-    sti();
+    uint16_t ret, data_port;
+    uint32_t cf8;
+
+    switch (pci_mechanism) {
+    	case 1:
+    		data_port = 0xcfc | (reg & 0x02);
+    		cf8 = pci_cf8(bus, dev, func, reg);
+    		cli();
+    		outl(0xcf8, cf8);
+    		ret = inw(data_port);
+    		sti();
+    		break;
+
+    	case 2:
+    		cf8 = pci_readl(bus, dev, func, reg);
+    		ret = cf8 >> ((reg & 0x02) << 3);
+    		break;
+
+    	default:
+    		ret = 0xffff;
+    		break;
+    }
+
     return ret;
 }
 
@@ -353,11 +418,33 @@ pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 uint32_t
 pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
-    uint32_t ret, cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    ret = inl(0xcfc);
-    sti();
+    uint16_t data_port;
+    uint32_t ret, cf8;
+
+    switch (pci_mechanism) {
+	case 1:
+		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		ret = inl(0xcfc);
+		sti();
+		break;
+
+	case 2:
+		func = 0x80 | (func << 1);
+		data_port = 0xc000 | (dev << 8) | (reg & 0xfc);
+		cli();
+		outb(0xcf8, func);
+		outb(0xcfa, bus);
+		ret = inl(data_port);
+		sti();
+		break;
+
+	default:
+		ret = 0xffffffff;
+		break;
+    }
+
     return ret;
 }
 
@@ -365,35 +452,84 @@ pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 void
 pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val)
 {
-    uint16_t data_port = 0xcfc | (reg & 0x03);
-    uint32_t cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    outb(data_port, val);
-    sti();
+    uint8_t shift;
+    uint16_t data_port;
+    uint32_t cf8;
+
+    switch (pci_mechanism) {
+    	case 1:
+    		data_port = 0xcfc | (reg & 0x03);
+    		cf8 = pci_cf8(bus, dev, func, reg);
+    		cli();
+    		outl(0xcf8, cf8);
+    		outb(data_port, val);
+    		sti();
+    		break;
+
+    	case 2:
+    		cf8 = pci_readl(bus, dev, func, reg);
+    		shift = (reg & 0x03) << 3;
+    		cf8 &= ~(0x000000ff << shift);
+    		cf8 |= val << shift;
+    		pci_writel(bus, dev, func, reg, cf8);
+    		break;
+    }
 }
 
 
 void
 pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val)
 {
-    uint16_t data_port = 0xcfc | (reg & 0x02);
-    uint32_t cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    outw(data_port, val);
-    sti();
+    uint8_t shift;
+    uint16_t data_port;
+    uint32_t cf8;
+
+    switch (pci_mechanism) {
+    	case 1:
+    		data_port = 0xcfc | (reg & 0x02);
+    		cf8 = pci_cf8(bus, dev, func, reg);
+    		cli();
+    		outl(0xcf8, cf8);
+    		outw(data_port, val);
+    		sti();
+    		break;
+
+    	case 2:
+    		cf8 = pci_readl(bus, dev, func, reg);
+    		shift = (reg & 0x02) << 3;
+    		cf8 &= ~(0x0000ffff << shift);
+    		cf8 |= val << shift;
+    		pci_writel(bus, dev, func, reg, cf8);
+    		break;
+    }
 }
 
 
 void
 pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
 {
-    uint32_t cf8 = pci_cf8(bus, dev, func, reg);
-    cli();
-    outl(0xcf8, cf8);
-    outl(0xcfc, val);
-    sti();
+    uint16_t data_port;
+    uint32_t cf8;
+
+    switch (pci_mechanism) {
+    	case 1:
+    		cf8 = pci_cf8(bus, dev, func, reg);
+    		cli();
+    		outl(0xcf8, cf8);
+    		outl(0xcfc, val);
+    		sti();
+    		break;
+
+    	case 2:
+    		func = 0x80 | (func << 1);
+    		data_port = 0xc000 | (dev << 8) | (reg & 0xfc);
+    		cli();
+    		outb(0xcf8, func);
+    		outb(0xcfa, bus);
+    		outl(data_port, val);
+    		sti();
+    		break;
+    }
 }
 
 

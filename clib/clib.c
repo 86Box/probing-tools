@@ -329,20 +329,20 @@ int
 pci_init()
 {
     multi_t cf8;
-    cf8.u32 = 0x80000000;
+    cf8.u32 = 0x80001234;
 
     /* Determine the supported PCI configuration mechanism. */
     cli();
-    outb(0xcf8, 0x00);
-    outb(0xcfa, 0x00);
-    if ((inb(0xcf8) == 0x00) && (inb(0xcfa) == 0x00)) {
-	pci_mechanism = 2;
-	pci_device_count = 32;
+    outl(0xcf8, cf8.u32);
+    cf8.u32 = inl(0xcf8);
+    if (cf8.u32 == 0x80001234) {
+    	pci_mechanism = 1;
+    	pci_device_count = 32;
     } else {
-	outl(0xcf8, cf8.u32);
-	cf8.u32 = inl(0xcf8);
-	if (cf8.u32 == 0x80000000) {
-		pci_mechanism = 1;
+	outb(0xcf8, 0x00);
+	outb(0xcfa, 0x00);
+	if ((inb(0xcf8) == 0x00) && (inb(0xcfa) == 0x00)) {
+		pci_mechanism = 2;
 		pci_device_count = 16;
 	}
     }
@@ -530,25 +530,4 @@ pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
 		sti();
 		break;
     }
-}
-
-
-/* File I/O functions. */
-void
-fseek_to(FILE *f, long offset)
-{
-    fseek(f, offset, SEEK_SET);
-
-#ifdef __POSIX_UEFI__
-    /* Work around broken fseek implementation. */
-    long pos = ftell(f);
-    if (pos == offset)
-	return;
-
-    uint8_t dummy[512];
-    while (pos < offset) {
-	fread(&dummy, MIN(sizeof(dummy), offset - pos), 1, f);
-	pos = ftell(f);
-    }
-#endif
 }

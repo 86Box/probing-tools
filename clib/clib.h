@@ -125,7 +125,4 @@ extern void	pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint
 extern void	pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val);
 extern void	pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val);
 
-/* File I/O functions. */
-extern void	fseek_to(FILE *f, long offset);
-
 #endif

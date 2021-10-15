@@ -66,15 +66,15 @@ parse_hex_u32(char *val, uint32_t *dest)
 
     *dest = 0;
     for (i = 0; i < len; i++) {
-    	if ((val[i] >= 0x30) && (val[i] <= 0x39))
-    		digit = val[i] - 0x30;
-    	else if ((val[i] >= 0x41) && (val[i] <= 0x46))
-    		digit = val[i] - 0x37;
-    	else if ((val[i] >= 0x61) && (val[i] <= 0x66))
-    		digit = val[i] - 0x57;
-    	else
-    		return 0;
-    	*dest = (*dest << 4) | digit;
+	if ((val[i] >= 0x30) && (val[i] <= 0x39))
+		digit = val[i] - 0x30;
+	else if ((val[i] >= 0x41) && (val[i] <= 0x46))
+		digit = val[i] - 0x37;
+	else if ((val[i] >= 0x61) && (val[i] <= 0x66))
+		digit = val[i] - 0x57;
+	else
+		return 0;
+	*dest = (*dest << 4) | digit;
     }
 
     return 1;
@@ -362,9 +362,9 @@ pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     uint32_t cf8;
 
     switch (pci_mechanism) {
-    	case 1:
-    		data_port = 0xcfc | (reg & 0x03);
-    		cf8 = pci_cf8(bus, dev, func, reg);
+	case 1:
+		data_port = 0xcfc | (reg & 0x03);
+		cf8 = pci_cf8(bus, dev, func, reg);
 		cli();
 		outl(0xcf8, cf8);
 		ret = inb(data_port);
@@ -392,23 +392,23 @@ pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     uint32_t cf8;
 
     switch (pci_mechanism) {
-    	case 1:
-    		data_port = 0xcfc | (reg & 0x02);
-    		cf8 = pci_cf8(bus, dev, func, reg);
-    		cli();
-    		outl(0xcf8, cf8);
-    		ret = inw(data_port);
-    		sti();
-    		break;
+	case 1:
+		data_port = 0xcfc | (reg & 0x02);
+		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		ret = inw(data_port);
+		sti();
+		break;
 
-    	case 2:
-    		cf8 = pci_readl(bus, dev, func, reg);
-    		ret = cf8 >> ((reg & 0x02) << 3);
-    		break;
+	case 2:
+		cf8 = pci_readl(bus, dev, func, reg);
+		ret = cf8 >> ((reg & 0x02) << 3);
+		break;
 
-    	default:
-    		ret = 0xffff;
-    		break;
+	default:
+		ret = 0xffff;
+		break;
     }
 
     return ret;
@@ -457,22 +457,22 @@ pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val)
     uint32_t cf8;
 
     switch (pci_mechanism) {
-    	case 1:
-    		data_port = 0xcfc | (reg & 0x03);
-    		cf8 = pci_cf8(bus, dev, func, reg);
-    		cli();
-    		outl(0xcf8, cf8);
-    		outb(data_port, val);
-    		sti();
-    		break;
+	case 1:
+		data_port = 0xcfc | (reg & 0x03);
+		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		outb(data_port, val);
+		sti();
+		break;
 
-    	case 2:
-    		cf8 = pci_readl(bus, dev, func, reg);
-    		shift = (reg & 0x03) << 3;
-    		cf8 &= ~(0x000000ff << shift);
-    		cf8 |= val << shift;
-    		pci_writel(bus, dev, func, reg, cf8);
-    		break;
+	case 2:
+		cf8 = pci_readl(bus, dev, func, reg);
+		shift = (reg & 0x03) << 3;
+		cf8 &= ~(0x000000ff << shift);
+		cf8 |= val << shift;
+		pci_writel(bus, dev, func, reg, cf8);
+		break;
     }
 }
 
@@ -485,22 +485,22 @@ pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val)
     uint32_t cf8;
 
     switch (pci_mechanism) {
-    	case 1:
-    		data_port = 0xcfc | (reg & 0x02);
-    		cf8 = pci_cf8(bus, dev, func, reg);
-    		cli();
-    		outl(0xcf8, cf8);
-    		outw(data_port, val);
-    		sti();
-    		break;
+	case 1:
+		data_port = 0xcfc | (reg & 0x02);
+		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		outw(data_port, val);
+		sti();
+		break;
 
-    	case 2:
-    		cf8 = pci_readl(bus, dev, func, reg);
-    		shift = (reg & 0x02) << 3;
-    		cf8 &= ~(0x0000ffff << shift);
-    		cf8 |= val << shift;
-    		pci_writel(bus, dev, func, reg, cf8);
-    		break;
+	case 2:
+		cf8 = pci_readl(bus, dev, func, reg);
+		shift = (reg & 0x02) << 3;
+		cf8 &= ~(0x0000ffff << shift);
+		cf8 |= val << shift;
+		pci_writel(bus, dev, func, reg, cf8);
+		break;
     }
 }
 
@@ -512,23 +512,23 @@ pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
     uint32_t cf8;
 
     switch (pci_mechanism) {
-    	case 1:
-    		cf8 = pci_cf8(bus, dev, func, reg);
-    		cli();
-    		outl(0xcf8, cf8);
-    		outl(0xcfc, val);
-    		sti();
-    		break;
+	case 1:
+		cf8 = pci_cf8(bus, dev, func, reg);
+		cli();
+		outl(0xcf8, cf8);
+		outl(0xcfc, val);
+		sti();
+		break;
 
-    	case 2:
-    		func = 0x80 | (func << 1);
-    		data_port = 0xc000 | (dev << 8) | (reg & 0xfc);
-    		cli();
-    		outb(0xcf8, func);
-    		outb(0xcfa, bus);
-    		outl(data_port, val);
-    		sti();
-    		break;
+	case 2:
+		func = 0x80 | (func << 1);
+		data_port = 0xc000 | (dev << 8) | (reg & 0xfc);
+		cli();
+		outb(0xcf8, func);
+		outb(0xcfa, bus);
+		outl(data_port, val);
+		sti();
+		break;
     }
 }
 

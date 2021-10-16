@@ -4,7 +4,7 @@ DOS tool for probing ACPI behavior in some chipsets.
 
 Usage
 -----
-Run `ACPI` on a system with an Intel PIIX4, SMSC SLC90E66 or VIA VT82C586/596/686 southbridge. Follow the on-screen prompts.
+Run `ACPI.EXE` on a system with an Intel PIIX4, SMSC SLC90E66 or VIA VT82C586/596/686 southbridge. Follow the on-screen prompts.
 
 Building
 --------

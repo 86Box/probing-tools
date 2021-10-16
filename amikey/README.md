@@ -11,7 +11,7 @@ If running `AMIKEY.COM` hangs or reboots your system, run `JETKEY.COM` instead, 
 Inform us on Discord or by creating an issue in this repository (make sure to attach `AMIKEY.BIN` or `JETKEY.BIN`) if your system:
 
 * reports any of the following revision codes: `7` `8` `A` `B` `D` `E` `L` `M` `N` `P` `R` `Z`; or
-* has an AMI BIOS *and* the revision code does not match [the character at the end of the BIOS string displayed at POST](postkbc.png); or
+* has an AMI BIOS *and* the revision code does not match [the character at the end of the identification string displayed at POST](postkbc.png); or
 * has an early AMI BIOS with `(C) Access Methods Inc.` copyright; or
 * doesn't have a JETkey keyboard controller chip *and* running `AMIKEY.COM` froze or rebooted it.
 

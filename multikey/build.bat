@@ -7,7 +7,7 @@
 : 
 : 		This file is part of the 86Box Probing Tools distribution.
 : 
-: 		Build script for compiling assembly tools with NewBasic.
+: 		Build script for assembling tools with NewBasic.
 : 
 : 
 : 

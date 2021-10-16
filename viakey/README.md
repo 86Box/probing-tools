@@ -6,6 +6,8 @@ Usage
 -----
 Run `VIAKEY.COM`. If a VT82C42N keyboard controller is found (either standalone or integrated to a VIA southbridge), its revision code will be displayed. Any errors in the probing process will be displayed on screen.
 
+The [amikey tool](../amikey) can perform a more detailed probe, as the VT82C42N is compatible with the American Megatrends AMIKEY.
+
 Building
 --------
 * **Windows:** Run `build.bat VIAKEY` with [NewBasic](http://www.fysnet.net/newbasic.htm) present in `%PATH%`.

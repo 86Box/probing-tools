@@ -12,7 +12,7 @@ cp437 infile [infile...]
 
 Building
 --------
-This tool is automatically built as needed by the build scripts for other tools. Alternatively:
+This tool is automatically built as needed by the makefiles for other tools. Alternatively:
 
 * **Windows:** Run `wmake` from an OpenWatcom "Build Environment" command prompt.
 * **Linux:** Run `wmake` with OpenWatcom tools present in `$PATH`.

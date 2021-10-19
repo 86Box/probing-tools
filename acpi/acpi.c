@@ -43,16 +43,16 @@ probe_intel(uint8_t dev, uint8_t func)
     /* Read and print SMI traps. */
     devctl = inl(acpi_base + 0x2e);
     status = pci_readb(0, dev, func, 0x62);
-    printf("SMI traps: Dev9   %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x60), status & 0x0f,
+    printf("SMI traps: Dev9  = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x60), status & 0x0f,
 	   (status & 0x20) ? '√' : ' ', (devctl & 0x0008) ? '√' : ' ');
     status = pci_readb(0, dev, func, 0x66);
-    printf("           Dev10  %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x64), status & 0x0f,
+    printf("           Dev10 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x64), status & 0x0f,
 	   (status & 0x20) ? '√' : ' ', (devctl & 0x0020) ? '√' : ' ');
     status = pci_readb(0, dev, func, 0x6a);
-    printf("           Dev12  %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x68), status & 0x0f,
+    printf("           Dev12 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x68), status & 0x0f,
 	   (status & 0x10) ? '√' : ' ', (devctl & 0x0100) ? '√' : ' ');
     status = pci_readb(0, dev, func, 0x72);
-    printf("           Dev13  %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x70), status & 0x0f,
+    printf("           Dev13 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x70), status & 0x0f,
 	   (status & 0x10) ? '√' : ' ', (devctl & 0x0200) ? '√' : ' ');
 
     /* Print contents of both PM1a control registers. */
@@ -96,21 +96,21 @@ probe_via(uint8_t dev, uint8_t func, uint16_t dev_id)
 	glben = inw(acpi_base + 0x2a);
 	if (dev_id == 0x3050) {
 		status = pci_readw(0, dev, 0, 0x76);
-		printf("SMI traps: PCS0  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
+		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
 		       (status & 0x0010) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ');
-		printf("           PCS1  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
+		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
 		       (status & 0x0020) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ');
 	} else {
 		status = pci_readw(0, dev, 0, 0x8b);
-		printf("SMI traps: PCS0  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
+		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
 		       (status & 0x0100) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ');
-		printf("           PCS1  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
+		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
 		       (status & 0x0200) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ');
 		mask = pci_readb(0, dev, 0, 0x8a);
 		glben = inw(acpi_base + 0x42); /* extended I/O trap */
-		printf("           PCS2  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8c), mask & 0x0f,
+		printf("           PCS2 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8c), mask & 0x0f,
 		       (status & 0x0400) ? '√' : ' ', (status & 0x4000) ? '√' : ' ', (glben & 0x0001) ? '√' : ' ');
-		printf("           PCS3  %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8e), (mask >> 4) & 0x0f,
+		printf("           PCS3 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8e), (mask >> 4) & 0x0f,
 		       (status & 0x0800) ? '√' : ' ', (status & 0x8000) ? '√' : ' ', (glben & 0x0002) ? '√' : ' ');
 	}
     }
@@ -153,29 +153,29 @@ main(int argc, char **argv)
 		continue;
 
 	/* Determine and execute southbridge-specific function. */
-	ven_id = pci_readw(0, dev, 3, 0);
-	dev_id = pci_readw(0, dev, 3, 2);
+	ven_id = pci_readw(0, dev, 3, 0x00);
+	dev_id = pci_readw(0, dev, 3, 0x02);
 	if ((ven_id == 0x8086) && (dev_id == 0x7113)) {
-		printf("Found PIIX4 ACPI at device %02X function %d\n", dev, 3);
+		printf("Found PIIX4 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 3, 0x08), dev, 3);
 		probe_intel(dev, 3);
 		return 0;
 	} else if ((ven_id == 0x1055) && (dev_id == 0x9463)) {
-		printf("Found SLC90E66 ACPI at device %02X function %d\n", dev, 3);
+		printf("Found SLC90E66 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 3, 0x08), dev, 3);
 		probe_intel(dev, 3);
 		return 0;
 	} else if ((ven_id == 0x1106) && (dev_id == 0x3040)) {
-		printf("Found VT82C586 ACPI at device %02X function %d\n", dev, 3);
+		printf("Found VT82C586 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 3, 0x08), dev, 3);
 		probe_via(dev, 3, dev_id);
 		return 0;
 	} else if ((ven_id == 0x1106) && (dev_id == 0x3050)) {
-		printf("Found VT82C596 ACPI at device %02X function %d\n", dev, 3);
+		printf("Found VT82C596 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 3, 0x08), dev, 3);
 		probe_via(dev, 3, dev_id);
 		return 0;
 	} else {
 		ven_id = pci_readw(0, dev, 4, 0);
 		dev_id = pci_readw(0, dev, 4, 2);
 		if ((ven_id == 0x1106) && (dev_id == 0x3057)) {
-			printf("Found VT82C686 ACPI at device %02X function %d\n", dev, 4);
+			printf("Found VT82C686 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 4, 0x08), dev, 4);
 			probe_via(dev, 4, dev_id);
 			return 0;
 		}

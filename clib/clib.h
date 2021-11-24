@@ -15,8 +15,8 @@
  *		Copyright 2021 RichardG.
  *
  */
-#ifndef WLIB_H
-# define WLIB_H
+#ifndef CLIB_H
+# define CLIB_H
 
 /* Common macros. */
 #define MIN(a, b)	((a) < (b) ? (a) : (b))

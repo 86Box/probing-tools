@@ -184,6 +184,7 @@ codec_probe(uint16_t (*codec_read)(uint8_t reg),
 static void
 audiopci_codec_wait(multi_t *regval)
 {
+    /* Wait for WIP to be cleared. */
     for (i = 1; i; i++) {
 	regval->u32 = inl(io_base | 0x14);
 	if (!(regval->u16[1] & 0x4000))
@@ -211,7 +212,7 @@ audiopci_codec_read(uint8_t reg)
     /* Wait for WIP to be cleared. */
     audiopci_codec_wait(&regval);
 
-    /* Read value. */
+    /* Return value read by audiopci_codec_wait. */
     return regval.u16[0];
 }
 
@@ -244,7 +245,7 @@ audiopci_probe()
     /* Get revision. */
     rev = pci_readb(bus, dev, func, 0x08);
 
-    /* Print basic information. */
+    /* Print controller information. */
     printf("Found AudioPCI %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
     printf("Subsystem ID is %04X:%04X\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
 
@@ -297,7 +298,7 @@ via_codec_read(uint8_t reg)
     /* Wait for Controller Busy to be cleared and Primary Valid to be set. */
     via_codec_wait(&regval, 0x0200);
 
-    /* Read value. */
+    /* Return value read by via_codec_wait. */
     return regval.u16[0];
 }
 
@@ -330,11 +331,10 @@ via_probe()
 {
     uint8_t rev, base_rev, is8233;
 
-    /* Print basic information. */
+    /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
     base_rev = pci_readb(bus, dev, 0, 0x08);
-    is8233 = (this_dev_id == 0x3059);
-    printf("Found VIA %s revision %02X (base %02X) at bus %02X device %02X function %d\n", is8233 ? "8233" : "686", rev, base_rev, bus, dev, func);
+    printf("Found VIA %04X revision %02X (base %02X) at bus %02X device %02X function %d\n", this_dev_id, rev, base_rev, bus, dev, func);
 
     /* Get SGD I/O BAR. */
     printf("SGD");
@@ -357,7 +357,7 @@ via_probe()
     printf("done.\n");
 
     /* Test Codec Shadow I/O BAR on 686. */
-    if (!is8233) {
+    if (this_dev_id == 0x3058) {
 	printf("Codec Shadow");
 	alt_io_base = get_io_bar(0x1c, 256);
 
@@ -432,7 +432,7 @@ intel_probe()
 {
     uint8_t rev;
 
-    /* Print basic information. */
+    /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
     printf("Found Intel %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
 

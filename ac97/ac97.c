@@ -55,7 +55,7 @@ get_io_bar(uint8_t reg, uint16_t size)
     /* Read BAR register. */
     ret = pci_readw(bus, dev, func, reg);
     if (!(ret & 0x0001) || (ret == 0xffff)) {
-    	temp = pci_readw(bus, dev, func, reg | 0x2);
+	temp = pci_readw(bus, dev, func, reg | 0x2);
 	printf("invalid! (%04X%04X)", temp, ret);
 	return 0;
     }
@@ -431,7 +431,6 @@ static void
 intel_probe()
 {
     uint8_t rev;
-    uint16_t bm_base;
 
     /* Print basic information. */
     rev = pci_readb(bus, dev, func, 0x08);

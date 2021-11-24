@@ -247,7 +247,7 @@ audiopci_probe()
 
     /* Print controller information. */
     printf("Found AudioPCI %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
-    printf("Subsystem ID is %04X:%04X\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
+    printf("Subsystem ID [%04X:%04X]\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
 
     /* Get I/O BAR. */
     printf("Main");
@@ -255,6 +255,8 @@ audiopci_probe()
     printf("\n");
     if (!io_base)
 	return;
+
+    printf("GPIO readout [%02X]\n", inb(io_base | 0x02));
 
     /* Perform codec probe. */
     codec_probe(audiopci_codec_read, audiopci_codec_write);

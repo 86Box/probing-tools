@@ -19,3 +19,8 @@ cp437/cp437.exe
 # UEFI
 NvVars
 pci?????.bin
+
+# Binaries
+*.exe
+*.com
+*.efi

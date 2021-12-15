@@ -56,10 +56,10 @@ CFLAGS		= -bt=$(SYSTEM) $(CFLAGS)
 .c.obj
 !if "$(CP437_CONV)" == "y"
 		..$(SLASH)cp437$(SLASH)$(CP437) $<
-		$(CC) $(CFLAGS) $<_cp437
+		$(CC) $(CFLAGS) $<_cp437 -fo=$*.obj
 		@$(DEL) $<_cp437
 !else
-		$(CC) $(CFLAGS) $<
+		$(CC) $(CFLAGS) $< -fo=$*.obj
 !endif
 
 # Default target, which must be the first!

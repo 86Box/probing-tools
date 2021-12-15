@@ -41,11 +41,17 @@ jobs:
           cd ${{ github.workspace }}/pcireg
           wmake
           make -f Makefile.uefi ARCH=x86_64
+          python3 pciids.py
       - uses: actions/upload-artifact@v2
         with:
+          name: probing-tools-${{ github.sha }}
           path: |
             **/*.EXE
             **/*.EFI
+            **/*.BIN
+            ac97/*.md
+            acpi/*.md
+            pcireg/*.md
 
   newbasic:
     name: NewBasic
@@ -74,4 +80,9 @@ jobs:
           ./build.bat VIAKEY
       - uses: actions/upload-artifact@v2
         with:
-          path: "**/*.COM"
+          name: probing-tools-${{ github.sha }}
+          path: |
+            **/*.COM
+            amikey/*.md
+            multikey/*.md
+            viakey/*.md

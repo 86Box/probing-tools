@@ -21,7 +21,6 @@ DEL		= rm -f
 COPY		= cp
 CP437		= cp437
 SLASH		= /
-WATCOM		= $WATCOM
 !else
 DEL		= del
 COPY		= copy /y

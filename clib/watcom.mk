@@ -21,11 +21,13 @@ DEL		= rm -f
 COPY		= cp
 CP437		= cp437
 SLASH		= /
+WATCOM		= $WATCOM
 !else
 DEL		= del
 COPY		= copy /y
 CP437		= cp437.exe
 SLASH		= \
+WATCOM		= %WATCOM%
 !if "$(SYSTEM)" == "HOST"
 # Build a Windows NT character-mode executable on Windows,
 # as that is not the default target (Win16 is).
@@ -77,7 +79,7 @@ all:		..$(SLASH)cp437$(SLASH)$(CP437) $(DEST)
 # Main target.
 $(DEST):	$(OBJS)
 !if "$(SYSTEM)" == "PMODEW"
-		$(COPY) %WATCOM%$(SLASH)binw$(SLASH)pmodew.exe .$(SLASH)
+		$(COPY) $(WATCOM)$(SLASH)binw$(SLASH)pmodew.exe .$(SLASH)
 !endif
 		%write $@.lnk NAME   $@
 !if "$(SYSTEM)" != "HOST"

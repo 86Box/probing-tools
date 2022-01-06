@@ -28,7 +28,7 @@ clean_device_abbr = [
 	('1000Base-T', 'GbE'),
 	('Accelerat(?:ion|or)', 'Accel.'),
 	('Alert on LAN', 'AoL'),
-	('\((.+) applications?\)', '\\2'), # 8086:105e
+	('\((.+) applications?\)', '(\\2)'), # 8086:105e
 	('Chipset Family', 'Chipset'),
 	('Chipset Graphics', 'iGPU'),
 	('Connection', 'Conn.'),
@@ -45,8 +45,8 @@ clean_device_abbr = [
 	('Host Bus Adapter', 'HBA'),
 	('Host Controller', 'HC'),
 	('Input/Output', 'I/O'),
-	('Integrated ([^\s]+) Graphics', '\\2 iGPU'), # VIA CLE266
-	('Integrated Graphics', 'iGPU'),
+	('Integrated ([^\s]+) (?:Graphics|GPU)', '\\2 iGPU'), # VIA CLE266
+	('Integrated (?:Graphics|GPU)', 'iGPU'),
 	('([0-9]) (lane|port)', '\\2-\\3'),
 	('Local Area Network', 'LAN'),
 	('Low Pin Count', 'LPC'),
@@ -54,7 +54,7 @@ clean_device_abbr = [
 	('Network (?:Interface )?(?:Adapter|Card|Controller)', 'NIC'),
 	('NVM Express', 'NVMe'),
 	('Parallel ATA', 'PATA'),
-	('PCI(?:-E| Express)', 'PCIe'),
+	('PCI(?:-E|[- ]Express)', 'PCIe'),
 	('([^- ]+)[- ]to[- ]([^- ]+)', '\\2-\\3'),
 	('Platform Controller Hub', 'PCH'),
 	('Processor Graphics', 'iGPU'),
@@ -245,10 +245,13 @@ def load_pci_db():
 # Debugging feature.
 if __name__ == '__main__':
 	s = input()
-	if len(s) == 8 and ' ' not in s:
-		vendor, device = get_pci_id(int(s[:4], 16), int(s[4:], 16))
-		vendor = clean_vendor(vendor)
-		print(vendor)
-		print(clean_device(device, vendor))
-	else:
+	try:
+		if len(s) in (8, 9):
+			vendor, device = get_pci_id(int(s[:4], 16), int(s[-4:], 16))
+			vendor = clean_vendor(vendor)
+			print(vendor)
+			print(clean_device(device, vendor))
+		else:
+			raise Exception('not id')
+	except:
 		print(clean_device(s))

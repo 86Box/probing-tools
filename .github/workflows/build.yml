@@ -1,0 +1,88 @@
+name: build
+
+on: push
+
+jobs:
+  make:
+    name: Make
+
+    runs-on: ubuntu-latest
+
+    env:
+      WATCOM: /opt/watcom
+      EDPATH: /opt/watcom/eddat
+      INCLUDE: /opt/watcom/h:/opt/watcom/lh
+
+    steps:
+      - name: Install build tools
+        run: sudo apt update && sudo apt install build-essential
+      - name: Download OpenWatcom
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /opt/watcom
+          mkdir /opt/watcom
+          wget -qO- https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/ow-snapshot.tar.gz | tar -xvz -C /opt/watcom
+          echo "/opt/watcom/binl64:/opt/watcom/binl" >> $GITHUB_PATH
+      - uses: actions/checkout@v2
+      - name: Build `cp437`
+        run: |
+          cd ${{ github.workspace }}/cp437
+          gcc cp437.c -o cp437
+      - name: Build `ac97`
+        run: |
+          cd ${{ github.workspace }}/ac97
+          wmake
+      - name: Build `acpi`
+        run: |
+          cd ${{ github.workspace }}/acpi
+          wmake
+      - name: Build `pcireg`
+        run: |
+          cd ${{ github.workspace }}/pcireg
+          wmake
+          make -f Makefile.uefi ARCH=x86_64
+          python3 pciids.py
+      - uses: actions/upload-artifact@v2
+        with:
+          name: probing-tools-${{ github.sha }}
+          path: |
+            **/*.EXE
+            **/*.EFI
+            **/*.BIN
+            ac97/*.md
+            acpi/*.md
+            pcireg/*.md
+
+  newbasic:
+    name: NewBasic
+
+    runs-on: windows-latest
+
+    steps:
+      - name: Download NewBasic assembler
+        run: |
+          Invoke-WebRequest http://www.fysnet.net/zips/nbasm.zip -OutFile nbasm.zip
+          Expand-Archive nbasm.zip -DestinationPath "$env:LOCALAPPDATA/Programs"
+          echo "$env:LOCALAPPDATA/Programs" >> $env:GITHUB_PATH
+      - uses: actions/checkout@v2
+      - name: Build `amikey`
+        run: |
+          cd ${{ github.workspace }}/amikey
+          ./build.bat AMIKEY
+          ./build.bat JETKEY
+      - name: Build `multikey`
+        run: |
+          cd ${{ github.workspace }}/multikey
+          ./build.bat MULTIKEY
+      - name: Build `viakey`
+        run: |
+          cd ${{ github.workspace }}/viakey
+          ./build.bat VIAKEY
+      - uses: actions/upload-artifact@v2
+        with:
+          name: probing-tools-${{ github.sha }}
+          path: |
+            **/*.COM
+            amikey/*.md
+            multikey/*.md
+            viakey/*.md

@@ -29,67 +29,6 @@ uint8_t first = 1, silent = 0, bus = 0, dev, func;
 uint16_t i, this_ven_id, this_dev_id, io_base, alt_io_base;
 
 
-static uint16_t
-find_io_range(uint16_t size)
-{
-    uint16_t base;
-
-    for (base = 0x1000; base >= 0x1000; base += size) {
-	/* Test first and last words only, as poking through the entire space
-	   can lead to trouble (VIA ACPI has magic reads that hang the CPU). */
-	if ((inw(base) == 0xffff) && (inw(base + size - 2) == 0xffff))
-		return base;
-    }
-
-    return 0;
-}
-
-
-static uint16_t
-get_io_bar(uint8_t reg, uint16_t size)
-{
-    uint16_t ret, temp;
-
-    printf(" I/O BAR is ");
-
-    /* Read BAR register. */
-    ret = pci_readw(bus, dev, func, reg);
-    if (!(ret & 0x0001) || (ret == 0xffff)) {
-	temp = pci_readw(bus, dev, func, reg | 0x2);
-	printf("invalid! (%04X%04X)", temp, ret);
-	return 0;
-    }
-
-    /* Assign BAR if unassigned. */
-    ret &= ~(size - 1);
-    if (ret) {
-	printf("assigned to %04X", ret);
-    } else {
-	printf("unassigned ");
-
-	/* Find I/O range for the BAR. */
-	ret = find_io_range(size);
-	if (ret) {
-		/* Assign and check value. */
-		pci_writew(bus, dev, func, reg, ret | 0x0001);
-		temp = pci_readw(bus, dev, func, reg);
-		if ((temp & ~(size - 1)) == ret) {
-			printf("(assigning to %04X)", ret);
-		} else {
-			ret = pci_readw(bus, dev, func, reg | 0x2);
-			printf("and not responding! (%04X%04X)", ret, temp);
-			return 0;
-		}
-	} else {
-		printf("and no suitable range was found!");
-		return 0;
-	}
-    }
-
-    return ret;
-}
-
-
 static void
 codec_probe(uint16_t (*codec_read)(uint8_t reg),
 	    void (*codec_write)(uint8_t reg, uint16_t val))
@@ -250,9 +189,7 @@ audiopci_probe()
     printf("Subsystem ID [%04X:%04X]\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
 
     /* Get I/O BAR. */
-    printf("Main");
-    io_base = get_io_bar(0x10, 64);
-    printf("\n");
+    io_base = pci_get_io_bar(bus, dev, func, 0x10, 64, "Main");
     if (!io_base)
 	return;
 
@@ -339,9 +276,7 @@ via_probe()
     printf("Found VIA %04X revision %02X (base %02X) at bus %02X device %02X function %d\n", this_dev_id, rev, base_rev, bus, dev, func);
 
     /* Get SGD I/O BAR. */
-    printf("SGD");
-    io_base = get_io_bar(0x10, 256);
-    printf("\n");
+    io_base = pci_get_io_bar(bus, dev, func, 0x10, 256, "SGD");
     if (!io_base)
 	return;
 
@@ -360,8 +295,7 @@ via_probe()
 
     /* Test Codec Shadow I/O BAR on 686. */
     if (this_dev_id == 0x3058) {
-	printf("Codec Shadow");
-	alt_io_base = get_io_bar(0x1c, 256);
+	alt_io_base = pci_get_io_bar(bus, dev, func, 0x1c, 256, "Codec Shadow");
 
 	/* Perform tests if the BAR is set. */
 	if (alt_io_base) {
@@ -369,10 +303,10 @@ via_probe()
 		via_codec_write(0x00, 0xffff);
 
 		/* Test shadow behavior. */
-		printf(", testing:\n");
+		printf("Testing Codec Shadow:");
 
 		i = via_codec_read(0x02);
-		printf("Read[%04X %04X]", i, inw(alt_io_base | 0x02));
+		printf(" Read[%04X %04X]", i, inw(alt_io_base | 0x02));
 
 		via_codec_write(0x02, 0xffff);
 		printf("  Write[%04X %04X]", 0xffff, inw(alt_io_base | 0x02));
@@ -383,7 +317,7 @@ via_probe()
 
 		outw(alt_io_base | 0x02, 0x0000);
 		i = inw(alt_io_base | 0x02);
-		printf("  DirectWrite[%04X %04X]", i, via_codec_read(0x02));
+		printf("\n                      DirectWrite[%04X %04X]", i, via_codec_read(0x02));
 	}
 
 	printf("\n");
@@ -439,16 +373,12 @@ intel_probe()
     printf("Found Intel %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
 
     /* Get Mixer I/O BAR. */
-    printf("Mixer");
-    io_base = get_io_bar(0x10, 256);
-    printf("\n");
+    io_base = pci_get_io_bar(bus, dev, func, 0x10, 256, "Mixer");
     if (!io_base)
 	return;
 
     /* Get Bus Master I/O BAR. */
-    printf("Bus Master");
-    alt_io_base = get_io_bar(0x14, 256);
-    printf("\n");
+    alt_io_base = pci_get_io_bar(bus, dev, func, 0x14, 256, "Bus Master");
     if (!alt_io_base)
 	return;
 

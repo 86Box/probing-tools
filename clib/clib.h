@@ -119,9 +119,11 @@ extern void	outw(uint16_t port, uint16_t data);
 extern uint32_t	inl(uint16_t port);
 extern void	outl(uint16_t port, uint32_t data);
 #endif
+extern uint16_t	io_find_range(uint16_t size);
 
 /* PCI I/O functions. */
 extern uint32_t	pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
+extern uint16_t	pci_get_io_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t size, const char *name);
 extern int	pci_init();
 extern uint8_t	pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint16_t	pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);

@@ -310,6 +310,22 @@ outl(uint16_t port, uint32_t val)
 #endif
 
 
+uint16_t
+io_find_range(uint16_t size)
+{
+    uint16_t base;
+
+    for (base = 0x1000; base >= 0x1000; base += size) {
+	/* Test first and last words only, as poking through the entire space
+	   can lead to trouble (VIA ACPI has magic reads that hang the CPU). */
+	if ((inw(base) == 0xffff) && (inw(base + size - 2) == 0xffff))
+		return base;
+    }
+
+    return 0;
+}
+
+
 /* PCI I/O functions. */
 uint32_t
 pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
@@ -322,6 +338,51 @@ pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     ret.u8[1] |= func & 7;
     ret.u8[0]  = reg & 0xfc;
     return ret.u32;
+}
+
+
+uint16_t
+pci_get_io_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t size, const char *name)
+{
+    uint16_t ret, temp;
+
+    printf("%s I/O BAR is ", name);
+
+    /* Read BAR register. */
+    ret = pci_readw(bus, dev, func, reg);
+    if (!(ret & 0x0001) || (ret == 0xffff)) {
+	temp = pci_readw(bus, dev, func, reg | 0x2);
+	printf("invalid! (%04X%04X)", temp, ret);
+	ret = 0;
+    } else {
+	/* Assign BAR if unassigned. */
+	ret &= ~(size - 1);
+	if (ret) {
+		printf("assigned to %04X", ret);
+	} else {
+		printf("unassigned ");
+
+		/* Find I/O range for the BAR. */
+		ret = io_find_range(size);
+		if (ret) {
+			/* Assign and check value. */
+			pci_writew(bus, dev, func, reg, ret | 0x0001);
+			temp = pci_readw(bus, dev, func, reg);
+			if ((temp & ~(size - 1)) == ret) {
+				printf("(assigning to %04X)", ret);
+			} else {
+				ret = pci_readw(bus, dev, func, reg | 0x2);
+				printf("and not responding! (%04X%04X)", ret, temp);
+				ret = 0;
+			}
+		} else {
+			printf("and no suitable range was found!");
+		}
+    	}
+    }
+
+    printf("\n");
+    return ret;
 }
 
 

@@ -326,7 +326,7 @@ io_find_range(uint16_t size)
 }
 
 
-/* PCI I/O functions. */
+/* PCI functions. */
 uint32_t
 pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
@@ -590,5 +590,65 @@ pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
 		outl(data_port, val);
 		sti();
 		break;
+    }
+}
+
+
+void
+pci_scan_bus(uint8_t bus,
+	     void (*callback)(uint8_t bus, uint8_t dev, uint8_t func,
+			      uint16_t ven_id, uint16_t dev_id))
+{
+    uint8_t dev, func, header_type;
+    multi_t dev_id;
+
+    /* Iterate through devices. */
+    for (dev = 0; dev < pci_device_count; dev++) {
+	/* Iterate through functions. */
+	for (func = 0; func < 8; func++) {
+		/* Read vendor/device ID. */
+#ifdef DEBUG
+		if ((bus < DEBUG) && (dev <= bus) && (func == 0)) {
+			dev_id.u16[0] = rand();
+			dev_id.u16[1] = rand();
+		} else {
+			dev_id.u32 = 0xffffffff;
+		}
+#else
+		dev_id.u32 = pci_readl(bus, dev, func, 0x00);
+#endif
+
+		/* Callback if this is a valid ID. */
+		if (dev_id.u32 && (dev_id.u32 != 0xffffffff)) {
+			callback(bus, dev, func, dev_id.u16[0], dev_id.u16[1]);
+		} else {
+			/* Stop or move on to the next function if there's nothing here. */
+			if (func)
+				continue;
+			else
+				break;
+		}
+
+		/* Read header type. */
+#ifdef DEBUG
+		header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
+#else
+		header_type = pci_readb(bus, dev, func, 0x0e);
+#endif
+
+		/* If this is a bridge, mark that we should probe its bus. */
+		if (header_type & 0x7f) {
+			/* Scan the secondary bus. */
+#ifdef DEBUG
+			pci_scan_bus(bus + 1, callback);
+#else
+			pci_scan_bus(pci_readb(bus, dev, func, 0x19), callback);
+#endif
+		}
+
+		/* If we're at the first function, stop if this is not a multi-function device. */
+		if ((func == 0) && !(header_type & 0x80))
+			break;
+	}
     }
 }

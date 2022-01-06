@@ -25,8 +25,8 @@
 #include "clib.h"
 
 
-uint8_t first = 1, silent = 0, bus = 0, dev, func;
-uint16_t i, this_ven_id, this_dev_id, io_base, alt_io_base;
+uint8_t first = 1, silent = 0, bus, dev, func;
+uint16_t i, io_base, alt_io_base;
 
 
 static void
@@ -177,7 +177,7 @@ audiopci_codec_write(uint8_t reg, uint16_t val)
 
 
 static void
-audiopci_probe()
+audiopci_probe(uint16_t dev_id)
 {
     uint8_t rev;
 
@@ -185,7 +185,7 @@ audiopci_probe()
     rev = pci_readb(bus, dev, func, 0x08);
 
     /* Print controller information. */
-    printf("Found AudioPCI %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
+    printf("Found AudioPCI %04X revision %02X at bus %02X device %02X function %d\n", dev_id, rev, bus, dev, func);
     printf("Subsystem ID [%04X:%04X]\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
 
     /* Get I/O BAR. */
@@ -266,14 +266,14 @@ via_codec_write(uint8_t reg, uint16_t val)
 
 
 static void
-via_probe()
+via_probe(uint16_t dev_id)
 {
     uint8_t rev, base_rev, is8233;
 
     /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
     base_rev = pci_readb(bus, dev, 0, 0x08);
-    printf("Found VIA %04X revision %02X (base %02X) at bus %02X device %02X function %d\n", this_dev_id, rev, base_rev, bus, dev, func);
+    printf("Found VIA %04X revision %02X (base %02X) at bus %02X device %02X function %d\n", dev_id, rev, base_rev, bus, dev, func);
 
     /* Get SGD I/O BAR. */
     io_base = pci_get_io_bar(bus, dev, func, 0x10, 256, "SGD");
@@ -294,7 +294,7 @@ via_probe()
     printf("done.\n");
 
     /* Test Codec Shadow I/O BAR on 686. */
-    if (this_dev_id == 0x3058) {
+    if (dev_id == 0x3058) {
 	alt_io_base = pci_get_io_bar(bus, dev, func, 0x1c, 256, "Codec Shadow");
 
 	/* Perform tests if the BAR is set. */
@@ -364,13 +364,13 @@ intel_codec_write(uint8_t reg, uint16_t val)
 
 
 static void
-intel_probe()
+intel_probe(uint16_t dev_id)
 {
     uint8_t rev;
 
     /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
-    printf("Found Intel %04X revision %02X at bus %02X device %02X function %d\n", this_dev_id, rev, bus, dev, func);
+    printf("Found Intel %04X revision %02X at bus %02X device %02X function %d\n", dev_id, rev, bus, dev, func);
 
     /* Get Mixer I/O BAR. */
     io_base = pci_get_io_bar(bus, dev, func, 0x10, 256, "Mixer");
@@ -416,83 +416,22 @@ print_spacer()
 
 
 static void
-scan_bus()
+pci_scan_callback(uint8_t this_bus, uint8_t this_dev, uint8_t this_func,
+		  uint16_t ven_id, uint16_t dev_id)
 {
-    uint8_t header_type, saved_bus, saved_dev, saved_func;
-    multi_t dev_id;
+    bus = this_bus;
+    dev = this_dev;
+    func = this_func;
 
-    /* Iterate through devices. */
-    for (dev = 0; dev < pci_device_count; dev++) {
-	/* Iterate through functions. */
-	for (func = 0; func < 8; func++) {
-		/* Read vendor/device ID. */
-#ifdef DEBUG
-		if ((bus < DEBUG) && (dev <= bus) && (func == 0)) {
-			dev_id.u16[0] = rand();
-			dev_id.u16[1] = rand();
-		} else {
-			dev_id.u32 = 0xffffffff;
-		}
-#else
-		dev_id.u32 = pci_readl(bus, dev, func, 0x00);
-#endif
-
-		/* Probe a valid ID. */
-		if (dev_id.u32 && (dev_id.u32 != 0xffffffff)) {
-			this_ven_id = dev_id.u16[0];
-			this_dev_id = dev_id.u16[1];
-			if ((this_ven_id == 0x1274) && (this_dev_id != 0x5000)) {
-				print_spacer();
-				audiopci_probe();
-			} else if ((this_ven_id == 0x1106) && ((this_dev_id == 0x3058) || (this_dev_id == 0x3059))) {
-				print_spacer();
-				via_probe();
-			} else if ((this_ven_id == 0x8086) && ((this_dev_id == 0x2415) || (this_dev_id == 0x2425) || (this_dev_id == 0x2445) || (this_dev_id == 0x2485) || (this_dev_id == 0x24c5) || (this_dev_id == 0x24d5) || (this_dev_id == 0x25a6) || (this_dev_id == 0x266e) || (this_dev_id == 0x27de) || (this_dev_id == 0x7195))) {
-				print_spacer();
-				intel_probe();
-			}
-		} else {
-			/* Stop or move on to the next function if there's nothing here. */
-			if (func)
-				continue;
-			else
-				break;
-		}
-
-		/* Read header type. */
-#ifdef DEBUG
-		header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
-#else
-		header_type = pci_readb(bus, dev, func, 0x0e);
-#endif
-
-		/* If this is a bridge, mark that we should probe its bus. */
-		if (header_type & 0x7f) {
-			/* Save current state. */
-			saved_bus = bus;
-			saved_dev = dev;
-			saved_func = func;
-
-			/* Read bus numbers. */
-#ifdef DEBUG
-			bus = bus + 1;
-#else
-			bus = pci_readb(bus, dev, func, 0x19);
-#endif
-
-			/* Scan the secondary bus. */
-			scan_bus();
-
-			/* Restore saved state. */
-			bus = saved_bus;
-			dev = saved_dev;
-			func = saved_func;
-		}
-
-		/* If we're at the first function, stop if this is not a multi-function device. */
-		if ((func == 0) && !(header_type & 0x80))
-			break;
-	}
+    if ((ven_id == 0x1274) && (dev_id != 0x5000)) {
+	print_spacer();
+	audiopci_probe(dev_id);
+    } else if ((ven_id == 0x1106) && ((dev_id == 0x3058) || (dev_id == 0x3059))) {
+	print_spacer();
+	via_probe(dev_id);
+    } else if ((ven_id == 0x8086) && ((dev_id == 0x2415) || (dev_id == 0x2425) || (dev_id == 0x2445) || (dev_id == 0x2485) || (dev_id == 0x24c5) || (dev_id == 0x24d5) || (dev_id == 0x25a6) || (dev_id == 0x266e) || (dev_id == 0x27de) || (dev_id == 0x7195))) {
+	print_spacer();
+	intel_probe(dev_id);
     }
 }
 
@@ -501,8 +440,6 @@ int
 main(int argc, char **argv)
 {
     uint8_t dev, func;
-    uint16_t ven_id, dev_id;
-    uint32_t cf8;
 
     /* Disable stdout buffering. */
     term_unbuffer_stdout();
@@ -516,7 +453,7 @@ main(int argc, char **argv)
 	silent = 1;
 
     /* Scan PCI bus 0. */
-    scan_bus();
+    pci_scan_bus(0, pci_scan_callback);
 
     return 0;
 }

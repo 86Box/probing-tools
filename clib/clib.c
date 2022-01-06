@@ -386,6 +386,34 @@ pci_get_io_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t siz
 }
 
 
+#ifdef IS_32BIT
+uint32_t
+pci_get_mem_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t size, const char *name)
+{
+    uint32_t ret;
+
+    printf("%s memory BAR is ", name);
+
+    /* Read BAR register. */
+    ret = pci_readl(bus, dev, func, reg);
+    if ((ret & 0x00000001) || (ret == 0xffffffff)) {
+	printf("invalid! (%08X)", ret);
+	ret = 0;
+    } else {
+	/* Don't even try to find a valid memory range if the BAR is unassigned. */
+	ret &= ~(size - 1);
+	if (ret)
+		printf("assigned to %08X", ret);
+	else
+		printf("unassigned!");
+    }
+
+    printf("\n");
+    return ret;
+}
+#endif
+
+
 int
 pci_init()
 {

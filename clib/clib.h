@@ -34,6 +34,9 @@
 #ifndef __POSIX_UEFI__
 # define FMT_FLOAT_SUPPORTED	1
 #endif
+#if !defined(__WATCOMC__) || defined(M_I386)
+# define IS_32BIT	1
+#endif
 
 
 #pragma pack(push, 0)
@@ -124,6 +127,9 @@ extern uint16_t	io_find_range(uint16_t size);
 /* PCI functions. */
 extern uint32_t	pci_cf8(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint16_t	pci_get_io_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t size, const char *name);
+#ifdef IS_32BIT
+extern uint32_t	pci_get_mem_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t size, const char *name);
+#endif
 extern int	pci_init();
 extern uint8_t	pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);
 extern uint16_t	pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg);

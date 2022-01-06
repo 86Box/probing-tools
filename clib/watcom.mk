@@ -18,10 +18,12 @@
 # Establish host-specific stuff.
 !ifdef __UNIX__
 DEL		= rm -f
+COPY		= cp
 CP437		= cp437
 SLASH		= /
 !else
 DEL		= del
+COPY		= copy /y
 CP437		= cp437.exe
 SLASH		= \
 !if "$(SYSTEM)" == "HOST"
@@ -74,6 +76,9 @@ all:		..$(SLASH)cp437$(SLASH)$(CP437) $(DEST)
 
 # Main target.
 $(DEST):	$(OBJS)
+!if "$(SYSTEM)" == "PMODEW"
+		$(COPY) %WATCOM%$(SLASH)binw$(SLASH)pmodew.exe .$(SLASH)
+!endif
 		%write $@.lnk NAME   $@
 !if "$(SYSTEM)" != "HOST"
 		%write $@.lnk SYSTEM $(SYSTEM)

@@ -46,10 +46,10 @@ pci_scan_callback(uint8_t bus, uint8_t dev, uint8_t func,
 
 	/* Get RCBA. */
 	printf("> RCBA is ");
-	mmio_base = pci_readl(bus, dev, func, 0xf0) & ~0x00003fff;
+	mmio_base = pci_readl(bus, dev, func, 0xf0);
 	if ((mmio_base & 0x00000001) && (mmio_base != 0xffffffff)) {
 		printf("assigned to %08X\n", mmio_base);
-		mmio = (uint32_t *) mmio_base;
+		mmio = (uint32_t *) (mmio_base & ~0x00003fff);
 
 		/* Disable all relevant I/O traps. */
 		for (i = 0; i < 4; i++) {

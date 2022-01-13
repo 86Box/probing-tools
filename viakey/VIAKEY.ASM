@@ -16,7 +16,7 @@
 ;
 
 .model tiny
-.386
+.286
 .code
 
 start:
@@ -85,9 +85,9 @@ viakey_test:
 	mov	al,0afh
 	out	64h,al
 	call	wait_for_nibf
-	jnz	gcv_stuck
+	jnz	short gcv_stuck
 	call	wait_for_obf
-	jz	not_viakey
+	jz	short not_viakey
 	in	al,60h
 	mov	si,offset ver
 	call	convert_to_hex
@@ -105,7 +105,7 @@ disable_kbd:
 	mov	al,0adh
 	out	64h,al
 	call	wait_for_nibf
-	jz	dkbd_ret
+	jz	short dkbd_ret
 	mov	byte [erl],1
 dkbd_ret:
 	ret
@@ -114,7 +114,7 @@ enable_kbd:
 	mov	al,0aeh
 	out	64h,al
 	call	wait_for_nibf
-	jz	ekbd_ret
+	jz	short ekbd_ret
 	mov	byte [erl],4
 ekbd_ret:
 	ret

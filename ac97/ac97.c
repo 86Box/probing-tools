@@ -384,12 +384,12 @@ intel_probe(uint16_t dev_id)
 
     /* Set up AC-Link interface. */
     printf("Waking codec up... ");
-    outb(alt_io_base | 0x2c, inb(alt_io_base | 0x2c) | 0x02);
-    for (i = 0; i < 4096; i++) /* unknown delay required */
-	outb(0xeb, 0x00);
-    outb(alt_io_base | 0x2c, inb(alt_io_base | 0x2c) & ~0x02);
+    outl(alt_io_base | 0x2c, inl(alt_io_base | 0x2c) & ~0x00000002);
+    for (i = 1; i; i++) /* unknown delay required */
+	inb(0xeb);
+    outl(alt_io_base | 0x2c, inl(alt_io_base | 0x2c) | 0x00000002);
     for (i = 1; i; i++) {
-	if (inb(alt_io_base | 0x31) & 0x01)
+	if (inl(alt_io_base | 0x30) & 0x00000100)
 		break;
     }
     if (!i) {

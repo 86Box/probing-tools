@@ -269,7 +269,7 @@ via_codec_write(uint8_t reg, uint16_t val)
 static void
 via_probe(uint16_t dev_id)
 {
-    uint8_t rev, base_rev, is8233;
+    uint8_t rev, base_rev;
 
     /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
@@ -283,7 +283,7 @@ via_probe(uint16_t dev_id)
 
     /* Set up AC-Link interface. */
     printf("Waking codec up... ");
-    pci_writeb(bus, dev, func, 0x41, is8233 ? 0xc0 : 0xc4);
+    pci_writeb(bus, dev, func, 0x41, (dev_id == 0x3058) ? 0xc4 : 0xc0);
     for (i = 1; i; i++) {
 	if (pci_readb(bus, dev, func, 0x40) & 0x01)
 		break;

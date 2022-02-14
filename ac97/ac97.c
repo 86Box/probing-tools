@@ -92,7 +92,8 @@ codec_probe(uint16_t (*codec_read)(uint8_t reg),
 
 		/* Read and print the word value. */
 		*regp = codec_read(cur_reg);
-		if (!silent) printf(" %04X", *regp++);
+		if (!silent) printf(" %04X", *regp);
+		regp++;
 
 		cur_reg += 2;
 	} while (cur_reg & 0x0f);

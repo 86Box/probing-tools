@@ -1,0 +1,15 @@
+!define BLANK ""
+F:\VMs\biosdump.obj : F:\VMs\biosdump.c .AUTODEPEND
+ @F:
+ cd F:\VMs
+ *wcc386 biosdump.c -i="C:\WATCOM/h" -w4 -e25 -zq -od -d2 -6r -bt=dos -fo=.o&
+bj -mf
+
+F:\VMs\biosdump.exe : F:\VMs\biosdump.obj .AUTODEPEND
+ @F:
+ cd F:\VMs
+ @%write biosdump.lk1 FIL biosdump.obj
+ @%append biosdump.lk1 
+ *wlink name biosdump d all sys dos4g op m op maxe=25 op q op symf @biosdump&
+.lk1
+

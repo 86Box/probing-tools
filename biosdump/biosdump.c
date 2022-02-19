@@ -1,7 +1,22 @@
+/*
+ * 86Box	A hypervisor and IBM PC system emulator that specializes in
+ *		running old operating systems and software designed for IBM
+ *		PC systems and compatibles from 1981 through fairly recent
+ *		system designs based on the PCI bus.
+ *
+ *		This file is part of the 86Box distribution.
+ *
+ *		BIOS dumping tool.
+ *
+ * Authors:	Miran Grca, <mgrca8@gmail.com>
+ *
+ *		Copyright 2021-2022 Miran Grca.
+ */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "clib.h"
 
 
 int
@@ -14,6 +29,9 @@ main(void)
     FILE *f;
     char *p;
     uint32_t size, ret;
+
+    /* Disable stdout buffering. */
+    term_unbuffer_stdout();
 
     printf("Dumping low BIOS range (000C0000-000FFFFF)... ");
     p = (char *) 0x000c0000;

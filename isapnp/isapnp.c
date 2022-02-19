@@ -138,7 +138,7 @@ read_resource_data(uint8_t *byte)
     /* Return failure if the read timed out. */
     if (i == 20) {
 	printf("\n> Read timed out at byte %d", ftell(f) + buf_pos + 1);
-	*byte = 0x00;
+	*byte = 0xff;
 	return 0;
     }
 
@@ -146,11 +146,9 @@ read_resource_data(uint8_t *byte)
     buf[buf_pos++] = *byte;
 
     /* Flush buffer if full. */
-    if (!buf_pos) {
-	if (fwrite(buf, sizeof(buf), 1, f) < 1) {
-		printf("\n> File write failed");
-		return 0;
-	}
+    if (!buf_pos && (fwrite(buf, sizeof(buf), 1, f) < 1)) {
+	printf("\n> File write failed");
+	return 0;
     }
 
     /* Return success. */
@@ -161,10 +159,13 @@ read_resource_data(uint8_t *byte)
 static int
 try_isolate()
 {
-    uint8_t identifier[9], csn, byte, i, j, seen_55aa, seen_life;
-    uint16_t data;
     char id[13];
+    uint8_t identifier[9], byte, i, j, seen_55aa, seen_life;
+    uint16_t data;
+    int csn;
     card_t *card, *new_card;
+
+    printf("\rScanning on Read Data Port %04X...", rd_data);
 
     /* Put all cards to Sleep. */
     unlock();
@@ -216,18 +217,21 @@ try_isolate()
 
 	/* Stop if we didn't see any 55AA patterns. */
 	if (!seen_55aa) {
-		if (!csn && seen_life) {
-			printf("Read Data Port %04X appears to be busy\n", rd_data);
+		if (!csn && seen_life)
 			csn = -1;
-		}
 		break;
 	}
 
-	/* Output ID and stop if the checksum is invalid. */
+	/* Output ID. */
+	if (csn == 0)
+		printf("\n");
 	parse_id(identifier, id);
-	printf("%s (%02X%02X%02X%02X) on Read Data Port %04X", id, identifier[7], identifier[6], identifier[5], identifier[4], rd_data);
+	printf("%s (%02X%02X%02X%02X)", id, identifier[7], identifier[6], identifier[5], identifier[4]);
+
+	/* Stop if the checksum is invalid. */
 	if (identifier[8] != checksum(identifier)) {
-		printf("\n> Bad checksum (expected %02X got %02X), trying another Read Data Port...\n", checksum(identifier), identifier[8]);
+		printf(" - bad checksum (expected %02X got %02X), trying another port\n",
+		       checksum(identifier), identifier[8]);
 		csn = -1;
 		break;
 	}
@@ -316,11 +320,9 @@ try_isolate()
 					j = 1;
 
 					/* Read logical device ID. */
-					read_resource_data(&identifier[0]);
-					read_resource_data(&identifier[1]);
-					read_resource_data(&identifier[2]);
-					read_resource_data(&identifier[3]);
-					data -= 4;
+					for (i = 0; i < 4; i++)
+						read_resource_data(&identifier[i]);
+					data -= i;
 
 					/* Output logical device ID. */
 					parse_id(identifier, id);
@@ -397,8 +399,11 @@ main(int argc, char **argv)
     }
 
     /* Nothing returned. */
-    if (max_csn < 0) {
-	printf("Found no good Read Data Ports!\n");
+    if (max_csn <= 0) {
+	if (max_csn < 0)
+		printf("\nNo good Read Data Ports found!\n");
+	else
+		printf("\nNo devices found!\n");
 	return 1;
     }
 

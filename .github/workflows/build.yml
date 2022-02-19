@@ -36,6 +36,10 @@ jobs:
         run: |
           cd ${{ github.workspace }}/acpi
           wmake
+      - name: Build `biosdump`
+        run: |
+          cd ${{ github.workspace }}/biosdump
+          wmake
       - name: Build `isapnp`
         run: |
           cd ${{ github.workspace }}/isapnp
@@ -59,6 +63,7 @@ jobs:
             **/*.BIN
             ac97/*.md
             acpi/*.md
+            biosdump/*.md
             isapnp/*.md
             pcireg/*.md
             usblgoff/*.md

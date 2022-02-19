@@ -19,6 +19,40 @@
 #include "clib.h"
 
 
+static int
+dump_range(uint32_t base, uint32_t size, const char *id)
+{
+    char fn[13];
+    FILE *f;
+
+    /* Output the range being dumped. */
+    printf("Dumping %s BIOS range (%08X-%08X)...", id, base, base + size - 1);
+
+    /* Generate file name. */
+    sprintf(fn, "%08X.DMP", base);
+
+    /* Open the dump file. */
+    f = fopen(fn, "wb");
+    if (!f) {
+	printf(" FAILURE\n");
+	return 1;
+    }
+
+    /* Write the dump. */
+    if (fwrite((char *) base, 1, size, f) != size) {
+	printf(" FAILURE\n");
+	fclose(f);
+	return 2;
+    }
+
+    /* Finish the dump. */
+    fclose(f);
+    printf(" OK\n");
+
+    return 0;
+}
+
+
 int
 #ifdef STANDARD_MAIN
 main(int argc, char *argv[])
@@ -26,63 +60,18 @@ main(int argc, char *argv[])
 main(void)
 #endif
 {
-    FILE *f;
-    char *p;
-    uint32_t size, ret;
+    int ret;
 
     /* Disable stdout buffering. */
     term_unbuffer_stdout();
 
-    printf("Dumping low BIOS range (000C0000-000FFFFF)... ");
-    p = (char *) 0x000c0000;
-    size = 0x00040000;
-    f = fopen("000c0000.dmp", "wb");
-    if (f == NULL) {
-        printf("FAILURE\n");
-        return 1;
-    }
-    ret = fwrite(p, 1, size, f);
-    if (ret != size) {
-        printf("FAILURE\n");
-        fclose(f);
-        return 2;
-    }
-    fclose(f);
-    printf("OK\n\n");
-
-    printf("Dumping mid BIOS range (00FE0000-00FFFFFF)... ");
-    p = (char *) 0x00fe0000;
-    size = 0x00020000;
-    f = fopen("00fe0000.dmp", "wb");
-    if (f == NULL) {
-        printf("FAILURE\n");
-        return 3;
-    }
-    ret = fwrite(p, 1, size, f);
-    if (ret != size) {
-        printf("FAILURE\n");
-        fclose(f);
-        return 4;
-    }
-    fclose(f);
-    printf("OK\n\n");
-
-    printf("Dumping high BIOS range (FFF80000-FFFFFFFF)... ");
-    p = (char *) 0xfff80000;
-    size = 0x00080000;
-    f = fopen("fff80000.dmp", "wb");
-    if (f == NULL) {
-        printf("FAILURE\n");
-        return 5;
-    }
-    ret = fwrite(p, 1, size, f);
-    if (ret != size) {
-        printf("FAILURE\n");
-        fclose(f);
-        return 6;
-    }
-    fclose(f);
-    printf("OK\n");
+    /* Dump ranges. */
+    if ((ret = dump_range(0x000c0000, 0x00040000, "low")))
+	return ret;
+    if ((ret = dump_range(0x00fe0000, 0x00020000, "mid")))
+	return 2 + ret;
+    if ((ret = dump_range(0xfff80000, 0x00080000, "high")))
+	return 4 + ret;
 
     return 0;
 }

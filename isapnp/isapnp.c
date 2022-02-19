@@ -137,7 +137,7 @@ read_resource_data(uint8_t *byte)
 
     /* Return failure if the read timed out. */
     if (i == 20) {
-    	printf("\n> Read timed out at byte %d", ftell(f) + buf_pos + 1);
+	printf("\n> Read timed out at byte %d", ftell(f) + buf_pos + 1);
 	*byte = 0x00;
 	return 0;
     }
@@ -374,6 +374,9 @@ main(int argc, char **argv)
     int max_csn;
     card_t *card;
 
+    /* Disable stdout buffering. */
+    term_unbuffer_stdout();
+
     /* Try read data ports until a good one is found. iPXE tries
        [213:3FF] with a hole at [280:380] for whatever safety reason. */
     max_csn = -1;
@@ -386,17 +389,17 @@ main(int argc, char **argv)
 		break;
     }
 
-    /* Nothing returned. */
-    if (max_csn == -1) {
-	printf("Found no cards and no good Read Data Ports!\n");
-	return 1;
-    }
-
     /* Free the card list. */
     while (first_card) {
 	card = first_card->next;
 	free(first_card);
 	first_card = card;
+    }
+
+    /* Nothing returned. */
+    if (max_csn < 0) {
+	printf("Found no good Read Data Ports!\n");
+	return 1;
     }
 
     return 0;

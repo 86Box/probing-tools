@@ -19,6 +19,7 @@
 #include "clib.h"
 
 
+/* Dummy comment. */
 static int
 dump_range(uint32_t base, uint32_t size, const char *id)
 {

@@ -21,7 +21,7 @@ jobs:
         run: |
           rm -rf /opt/watcom
           mkdir /opt/watcom
-          wget -qO- https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/ow-snapshot.tar.xz | tar Jxvz -C /opt/watcom
+          wget -qO- https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/ow-snapshot.tar.xz | tar -Jxv -C /opt/watcom
           echo "/opt/watcom/binl64:/opt/watcom/binl" >> $GITHUB_PATH
       - uses: actions/checkout@v2
       - name: Build `cp437`

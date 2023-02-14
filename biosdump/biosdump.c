@@ -18,12 +18,11 @@
 #include <string.h>
 #include "clib.h"
 
-
 /* Dummy comment. */
 static int
 dump_range(uint32_t base, uint32_t size, const char *id)
 {
-    char fn[13];
+    char  fn[13];
     FILE *f;
 
     /* Output the range being dumped. */
@@ -35,15 +34,15 @@ dump_range(uint32_t base, uint32_t size, const char *id)
     /* Open the dump file. */
     f = fopen(fn, "wb");
     if (!f) {
-	printf("FAILURE\n");
-	return 1;
+        printf("FAILURE\n");
+        return 1;
     }
 
     /* Write the dump. */
     if (fwrite((char *) base, 1, size, f) != size) {
-	printf("FAILURE\n");
-	fclose(f);
-	return 2;
+        printf("FAILURE\n");
+        fclose(f);
+        return 2;
     }
 
     /* Finish the dump. */
@@ -52,7 +51,6 @@ dump_range(uint32_t base, uint32_t size, const char *id)
 
     return 0;
 }
-
 
 int
 #ifdef STANDARD_MAIN
@@ -68,11 +66,11 @@ main(void)
 
     /* Dump ranges. */
     if ((ret = dump_range(0x000c0000, 0x00040000, "low")))
-	return ret;
+        return ret;
     if ((ret = dump_range(0x00fe0000, 0x00020000, "mid")))
-	return 2 + ret;
+        return 2 + ret;
     if ((ret = dump_range(0xfff80000, 0x00080000, "high")))
-	return 4 + ret;
+        return 4 + ret;
 
     return 0;
 }

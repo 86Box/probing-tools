@@ -937,8 +937,8 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 	printf("\nMin Grant: %.0f us at 33 MHz", reg_val.u8[2] * 0.25);
 	printf("\nMax Latency: %.0f us at 33 MHz", reg_val.u8[3] * 0.25);
 #else
-	printf("\nMin Grant: (%d * 0.25) us at 33 MHz", reg_val.u8[2]);
-	printf("\nMax Latency: (%d * 0.25) us at 33 MHz", reg_val.u8[3]);
+	printf("\nMin Grant: %d.%d us at 33 MHz", reg_val.u8[2] >> 2, 25 * (reg_val.u8[2] & 3));
+	printf("\nMax Latency: %d.%d us at 33 MHz", reg_val.u8[3] >> 2, 25 * (reg_val.u8[2] & 3));
 #endif
     }
 

@@ -156,6 +156,141 @@ read_resource_data(uint8_t *byte)
 }
 
 
+static char
+dump_resource_data(char *id)
+{
+    uint8_t identifier[9], byte, i, j;
+    uint16_t data;
+    card_t *card, *new_card;
+
+    /* Sanitize parsed PnP ID for filename purposes. */
+    for (i = 0; i < 3; i++) {
+	if (id[i] > 'Z')
+		id[i] = '_';
+    }
+
+    /* Determine this card's unique identifier. */
+    i = 0;
+    card = first_card;
+    while (card) {
+	/* Increment unique identifier for each card
+	   already found with this sanitized parsed ID. */
+	if (!strcmp(card->id, id))
+		i++;
+	card = card->next;
+    }
+    new_card = malloc(sizeof(card_t));
+    strcpy(new_card->id, id);
+    new_card->next = NULL;
+    if (!first_card) {
+	first_card = new_card;
+    } else {
+	card = first_card;
+	while (card->next)
+		card = card->next;
+	card->next = new_card;
+    }
+
+    /* Generate a dump file name. */
+    i = 'A' + (i % 26);
+    sprintf(&id[strlen(id)], "%c.BIN", i);
+    printf(" - dumping to %s", id);
+
+    /* Open dump file. */
+    f = fopen(id, "wb");
+    if (f) {
+	/* Dump resource data, starting with the header. */
+	buf_pos = 0;
+	for (j = 0; j < 9; j++)
+		read_resource_data(&byte);
+
+	/* Flush buffer. */
+	if (fwrite(buf, buf_pos, 1, f) < 1)
+		printf("\n> File write failed");
+	buf_pos = 0;
+
+	/* Check for invalid resource data. */
+	if (!memcmp(buf, "\x00\x00\x00\x00\x00\x00\x00\x00\x00", 9) ||
+	    !memcmp(buf, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 9)) {
+		printf("\n> Invalid header (all %02X)", buf[0]);
+		goto done;
+	} else {
+		printf("\n> DEBUG: header: %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+		       buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8]);
+	}
+
+	/* Now dump the resources. */
+	j = 0;
+	while (read_resource_data(&byte)) {
+		if ((byte == 0x00) || (byte == 0xff)) {
+			printf("\n> DEBUG: %02X resource", byte);
+			break;
+		}
+
+		/* Determine the amount of bytes to skip depending on resource type. */
+		if (byte & 0x80) { /* large resource */
+			read_resource_data((uint8_t *) &data);
+			read_resource_data(((uint8_t *) &data) + 1);
+
+			/* Handle ANSI strings. */
+			byte &= 0x7f;
+			if (byte == 0x02) {
+				/* Output string. */
+				if (!j)
+					printf("\n>");
+				printf(" \"");
+				while (data--) {
+					read_resource_data(&byte);
+					if ((byte != 0x00) && (byte != '\r') && (byte != '\n'))
+						putchar(byte);
+				}
+				printf("\"");
+				data = 0;
+			}
+		} else { /* small resource */
+			data = byte & 0x07;
+
+			/* Handle some resource types. */
+			byte = (byte >> 3) & 0x0f;
+			if ((byte == 0x02) && (data >= 4)) { /* logical device */
+				/* Read logical device ID. */
+				for (j = 0; j < 4; j++)
+					read_resource_data(&identifier[j]);
+				data -= j;
+
+				/* Output logical device ID. */
+				parse_id(identifier, id);
+				printf("\n> %s", id);
+			} else if (byte == 0x0f) { /* end tag */
+				/* Read the rest of this resource (including the checksum), then stop. */
+				if (data == 0) /* just in case the checksum isn't covered */
+					data++;
+				while (data--)
+					read_resource_data(&byte);
+				break;
+			}
+		}
+
+		/* Skip bytes. */
+		while (data--)
+			read_resource_data(&byte);
+	}
+
+	/* Flush buffer if not empty. */
+	if (buf_pos && (fwrite(buf, buf_pos, 1, f) < 1))
+		printf("\n> File write failed");
+
+	/* Finish the dump. */
+done:	fclose(f);
+	printf("\n");
+    } else {
+	printf("\n> File creation failed\n");
+    }
+
+    return i;
+}
+
+
 static int
 try_isolate()
 {
@@ -163,9 +298,9 @@ try_isolate()
     uint8_t identifier[9], byte, i, j, seen_55aa, seen_life;
     uint16_t data;
     int csn;
-    card_t *card, *new_card;
 
     printf("\rScanning on Read Data Port %04X...", rd_data);
+    id[0] = 0;
 
     /* Put all cards to Sleep. */
     unlock();
@@ -185,6 +320,63 @@ try_isolate()
     outb(0x279, 0x00);
     outb(0xa79, rd_data >> 2);
     io_delay();
+
+    /* Check for and dump UMC Super I/O. */
+    outb(0x108, 0xaa);
+    if (inb(0x108) != 0xff) {
+    	outb(0x108, 0xc2);
+    	byte = inb(0x109);
+    	outb(0x108, 0x55);
+    	outb(0x108, 0xc2);
+	printf("\nUMC Super I/O (C2U=%02X C2L=%02X)", byte, inb(0x109));
+
+	/* Enable ISAPnP mode. */
+	outb(0x108, 0xaa);
+	outb(0x108, 0xc1);
+	byte = inb(0x109);
+	outb(0x108, 0xaa);
+	outb(0x108, 0xc1);
+	outb(0x109, byte | 0x80);
+
+	/* Dump resource data. */
+	sprintf(id, "UMCSIOP");
+	i = dump_resource_data(id);
+
+	/* Dump registers. */
+	sprintf(id, "UMCSIOR%c.BIN", i);
+	printf("> Dumping registers to %s", id);
+	f = fopen(id, "wb");
+	if (f) {
+		/* Dump registers to the buffer. */
+		i = 0xc0;
+		do {
+			outb(0x108, 0xaa);
+			outb(0x108, i);
+			buf[i] = inb(0x109);
+		} while (++i != 0xc0);
+
+		/* Flush buffer. */
+		if (fwrite(buf, sizeof(buf), 1, f) < 1)
+			printf("\n> File write failed");
+
+		/* Finish the dump. */
+		fclose(f);
+		printf("\n");
+	} else {
+		printf("\n> File creation failed\n");
+	}
+
+	/* Disable ISAPnP mode. */
+#if 0
+	outb(0x108, 0xaa);
+	outb(0x108, 0xc1);
+	byte = inb(0x109);
+	outb(0x108, 0xaa);
+	outb(0x108, 0xc1);
+	outb(0x109, byte & ~0x80);
+#endif
+	outb(0x108, 0x55);
+    }
 
     /* Isolate cards. */
     csn = 0;
@@ -223,7 +415,7 @@ try_isolate()
 	}
 
 	/* Output ID. */
-	if (csn == 0)
+	if (!id[0])
 		printf("\n");
 	parse_id(identifier, id);
 	printf("%s (%02X%02X%02X%02X)", id, identifier[7], identifier[6], identifier[5], identifier[4]);
@@ -247,113 +439,8 @@ try_isolate()
 	outb(0xa79, csn);
 	io_delay();
 
-	/* Sanitize parsed PnP ID for filename purposes. */
-	for (i = 0; i < 3; i++) {
-		if (id[i] > 'Z')
-			id[i] = '_';
-	}
-
-	/* Determine this card's unique identifier. */
-	i = 0;
-	card = first_card;
-	while (card) {
-		/* Increment unique identifier for each card
-		   already found with this sanitized parsed ID. */
-		if (!strcmp(card->id, id))
-			i++;
-		card = card->next;
-	}
-	new_card = malloc(sizeof(card_t));
-	strcpy(new_card->id, id);
-	new_card->next = NULL;
-	if (!first_card) {
-		first_card = new_card;
-	} else {
-		card = first_card;
-		while (card->next)
-			card = card->next;
-		card->next = new_card;
-	}
-
-	/* Generate a dump file name. */
-	sprintf(&id[7], "%c.BIN", 'A' + (i % 26));
-	printf(" - dumping to %s", id);
-
-	/* Open dump file. */
-	f = fopen(id, "wb");
-	if (f) {
-		/* Dump resource data, starting with the header. */
-		buf_pos = 0;
-		for (i = 0; i < 9; i++)
-			read_resource_data(&byte);
-
-		/* Now dump the resources. */
-		j = 0;
-		while (read_resource_data(&byte)) {
-			/* Determine the amount of bytes to skip depending on resource type. */
-			if (byte & 0x80) { /* large resource */
-				read_resource_data((uint8_t *) &data);
-				read_resource_data(((uint8_t *) &data) + 1);
-
-				/* Handle ANSI strings. */
-				byte &= 0x7f;
-				if (byte == 0x02) {
-					/* Output string. */
-					if (!j)
-						printf("\n>");
-					printf(" \"");
-					while (data--) {
-						read_resource_data(&byte);
-						if ((byte != 0x00) && (byte != '\r') && (byte != '\n'))
-							putchar(byte);
-					}
-					printf("\"");
-					data = 0;
-				}
-			} else { /* small resource */
-				data = byte & 0x07;
-
-				/* Handle some resource types. */
-				byte = (byte >> 3) & 0x0f;
-				if ((byte == 0x02) && (data >= 4)) { /* logical device */
-					/* Flag that we're in a logical device for string output purposes. */
-					j = 1;
-
-					/* Read logical device ID. */
-					for (i = 0; i < 4; i++)
-						read_resource_data(&identifier[i]);
-					data -= i;
-
-					/* Output logical device ID. */
-					parse_id(identifier, id);
-					printf("\n> %s", id);
-				} else if (byte == 0x0f) { /* end tag */
-					/* Read the rest of this resource (including the checksum), then stop. */
-					if (data == 0) /* just in case the checksum isn't covered */
-						data++;
-					while (data--)
-						read_resource_data(&byte);
-					break;
-				}
-			}
-
-			/* Skip bytes. */
-			while (data--)
-				read_resource_data(&byte);
-		}
-
-		/* Flush buffer if not empty. */
-		if (buf_pos) {
-			if (fwrite(buf, buf_pos, 1, f) < 1)
-				printf("\n> File write failed");
-		}
-
-		/* Finish the dump. */
-		fclose(f);
-		printf("\n");
-	} else {
-		printf("\n> File creation failed\n");
-	}
+	/* Dump resource data. */
+	dump_resource_data(id);
 
 	/* Put this card to Sleep and other cards to Isolation. */
 	outb(0x279, 0x03);

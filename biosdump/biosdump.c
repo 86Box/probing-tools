@@ -19,6 +19,7 @@
 #include "clib.h"
 
 
+/* Dummy comment. */
 static int
 dump_range(uint32_t base, uint32_t size, const char *id)
 {
@@ -26,7 +27,7 @@ dump_range(uint32_t base, uint32_t size, const char *id)
     FILE *f;
 
     /* Output the range being dumped. */
-    printf("Dumping %s BIOS range (%08X-%08X)...", id, base, base + size - 1);
+    printf("Dumping %s BIOS range (%08X-%08X)... ", id, base, base + size - 1);
 
     /* Generate file name. */
     sprintf(fn, "%08X.DMP", base);
@@ -34,20 +35,20 @@ dump_range(uint32_t base, uint32_t size, const char *id)
     /* Open the dump file. */
     f = fopen(fn, "wb");
     if (!f) {
-	printf(" FAILURE\n");
+	printf("FAILURE\n");
 	return 1;
     }
 
     /* Write the dump. */
     if (fwrite((char *) base, 1, size, f) != size) {
-	printf(" FAILURE\n");
+	printf("FAILURE\n");
 	fclose(f);
 	return 2;
     }
 
     /* Finish the dump. */
     fclose(f);
-    printf(" OK\n");
+    printf("OK\n");
 
     return 0;
 }

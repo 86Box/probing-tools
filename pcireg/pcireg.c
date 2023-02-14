@@ -32,7 +32,10 @@
 #        include <dos.h>
 #    endif
 #endif
-#include "clib.h"
+#include "clib_pci.h"
+#include "clib_std.h"
+#include "clib_sys.h"
+#include "clib_term.h"
 
 static const char *command_flags[] = {
     "I/O",

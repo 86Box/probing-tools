@@ -16,7 +16,7 @@
 #
 
 SYSTEM	= PMODEW
-OBJS	= usblgoff.obj clib.obj
+OBJS	= usblgoff.obj clib_pci.obj clib_sys.obj clib_term.obj
 DEST	= USBLGOFF.EXE
 
 !include ../clib/watcom.mk

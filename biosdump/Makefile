@@ -16,7 +16,7 @@
 #
 
 SYSTEM	= PMODEW
-OBJS	= biosdump.obj clib.obj
+OBJS	= biosdump.obj clib_term.obj
 DEST	= BIOSDUMP.EXE
 
 !include ../clib/watcom.mk

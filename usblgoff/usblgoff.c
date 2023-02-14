@@ -22,7 +22,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include "clib.h"
+#include "clib_pci.h"
+#include "clib_sys.h"
+#include "clib_term.h"
 
 static void
 pci_scan_callback(uint8_t bus, uint8_t dev, uint8_t func,

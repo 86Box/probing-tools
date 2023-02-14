@@ -21,7 +21,9 @@
  */
 #include <inttypes.h>
 #include <stdio.h>
-#include "clib.h"
+#include "clib_pci.h"
+#include "clib_sys.h"
+#include "clib_term.h"
 
 static void
 try_sleep()

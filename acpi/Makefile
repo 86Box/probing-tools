@@ -16,7 +16,7 @@
 #
 
 SYSTEM	= DOS
-OBJS	= acpi.obj clib.obj
+OBJS	= acpi.obj clib_pci.obj clib_sys.obj clib_term.obj
 DEST	= ACPI.EXE
 
 !include ../clib/watcom.mk

@@ -22,7 +22,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include "clib.h"
+#include "clib_sys.h"
+#include "clib_pci.h"
+#include "clib_term.h"
 
 uint8_t  first = 1, silent = 0, bus, dev, func;
 uint16_t i, io_base, alt_io_base;

@@ -33,7 +33,7 @@
 void *memcpy(void *dst, const void *src, size_t n)
 {
     uint8_t *a=(uint8_t*)dst,*b=(uint8_t*)src;
-    if(src && dst && n>0) {
+    if(src && dst && src != dst && n>0) {
         while(n--) *a++ = *b++;
     }
     return dst;
@@ -42,8 +42,8 @@ void *memcpy(void *dst, const void *src, size_t n)
 void *memmove(void *dst, const void *src, size_t n)
 {
     uint8_t *a=(uint8_t*)dst,*b=(uint8_t*)src;
-    if(src && dst && n>0) {
-        if((a<b && a+n>b) || (b<a && b+n>a)) {
+    if(src && dst && src != dst && n>0) {
+        if(a>b && a<b+n) {
             a+=n-1; b+=n-1; while(n-->0) *a--=*b--;
         } else {
             while(n--) *a++ = *b++;
@@ -56,7 +56,7 @@ void *memset(void *s, int c, size_t n)
 {
     uint8_t *p=(uint8_t*)s;
     if(s && n>0) {
-        while(n--) *p++ = c;
+        while(n--) *p++ = (uint8_t)c;
     }
     return s;
 }
@@ -64,7 +64,7 @@ void *memset(void *s, int c, size_t n)
 int memcmp(const void *s1, const void *s2, size_t n)
 {
     uint8_t *a=(uint8_t*)s1,*b=(uint8_t*)s2;
-    if(s1 && s2 && n>0) {
+    if(s1 && s2 && s1 != s2 && n>0) {
         while(n--) {
             if(*a != *b) return *a - *b;
             a++; b++;
@@ -95,7 +95,7 @@ void *memmem(const void *haystack, size_t hl, const void *needle, size_t nl)
 {
     uint8_t *c = (uint8_t*)haystack;
     if(!haystack || !needle || !hl || !nl || nl > hl) return NULL;
-    hl -= nl;
+    hl -= nl - 1;
     while(hl) {
         if(!memcmp(c, needle, nl)) return c;
         c++; hl--;
@@ -118,34 +118,37 @@ void *memrmem(const void *haystack, size_t hl, const void *needle, size_t nl)
 
 char_t *strcpy(char_t *dst, const char_t *src)
 {
-    if(src && dst) {
+    char_t *s = dst;
+    if(src && dst && src != dst) {
         while(*src) {*dst++=*src++;} *dst=0;
     }
-    return dst;
+    return s;
 }
 
 char_t *strncpy(char_t *dst, const char_t *src, size_t n)
 {
+    char_t *s = dst;
     const char_t *e = src+n;
-    if(src && dst && n>0) {
+    if(src && dst && src != dst && n>0) {
         while(*src && src<e) {*dst++=*src++;} *dst=0;
     }
-    return dst;
+    return s;
 }
 
 char_t *strcat(char_t *dst, const char_t *src)
 {
+    char_t *s = dst;
     if(src && dst) {
         dst += strlen(dst);
         while(*src) {*dst++=*src++;} *dst=0;
     }
-    return dst;
+    return s;
 }
 
 int strcmp(const char_t *s1, const char_t *s2)
 {
     if(s1 && s2 && s1!=s2) {
-        do{if(*s1!=*s2){return *s1-*s2;}s1++;s2++;}while(*s1!=0);
+        while(*s1 && *s1==*s2){s1++;s2++;}
         return *s1-*s2;
     }
     return 0;
@@ -153,19 +156,20 @@ int strcmp(const char_t *s1, const char_t *s2)
 
 char_t *strncat(char_t *dst, const char_t *src, size_t n)
 {
+    char_t *s = dst;
     const char_t *e = src+n;
     if(src && dst && n>0) {
         dst += strlen(dst);
         while(*src && src<e) {*dst++=*src++;} *dst=0;
     }
-    return dst;
+    return s;
 }
 
 int strncmp(const char_t *s1, const char_t *s2, size_t n)
 {
     const char_t *e = s1+n;
     if(s1 && s2 && s1!=s2 && n>0) {
-        do{if(*s1!=*s2){return *s1-*s2;}s1++;s2++;}while(*s1!=0 && s1<e);
+        while(s1<e && *s1 && *s1==*s2){s1++;s2++;}
         return *s1-*s2;
     }
     return 0;
@@ -173,9 +177,9 @@ int strncmp(const char_t *s1, const char_t *s2, size_t n)
 
 char_t *strdup(const char_t *s)
 {
-    int i = (strlen(s)+1) * sizeof(char_t);
+    size_t i = (strlen(s)+1) * sizeof(char_t);
     char_t *s2 = (char_t *)malloc(i);
-    if(s2 != NULL) memcpy(s2, (void*)s, i);
+    if(s2 != NULL) memcpy(s2, (const void*)s, i);
     return s2;
 }
 
@@ -195,9 +199,9 @@ char_t *strrchr(const char_t *s, int c)
     char_t *e;
     if(s) {
         e = (char_t*)s + strlen(s) - 1;
-        while(s < e) {
+        while(s <= e) {
             if(*e == (char_t)c) return e;
-            s--;
+            e--;
         }
     }
     return NULL;
@@ -208,16 +212,16 @@ char_t *strstr(const char_t *haystack, const char_t *needle)
     return memmem(haystack, strlen(haystack) * sizeof(char_t), needle, strlen(needle) * sizeof(char_t));
 }
 
-char_t *_strtok_r(char_t *s, const char_t *d, char_t **p)
+static char_t *_strtok_r(char_t *s, const char_t *d, char_t **p)
 {
     int c, sc;
     char_t *tok, *sp;
 
     if(d == NULL || (s == NULL && (s=*p) == NULL)) return NULL;
-
+again:
     c = *s++;
     for(sp = (char_t *)d; (sc=*sp++)!=0;) {
-        if(c == sc) { *p=s; *(s-1)=0; return s-1; }
+        if(c == sc) goto again;
     }
 
     if (c == 0) { *p=NULL; return NULL; }
@@ -239,7 +243,7 @@ char_t *_strtok_r(char_t *s, const char_t *d, char_t **p)
 
 char_t *strtok(char_t *s, const char_t *delim)
 {
-    char_t *p = s;
+    static char_t *p;
     return _strtok_r (s, delim, &p);
 }
 

@@ -35,10 +35,13 @@ static efi_serial_io_protocol_t *__ser = NULL;
 static block_file_t *__blk_devs = NULL;
 static uintn_t __blk_ndevs = 0;
 extern time_t __mktime_efi(efi_time_t *t);
+void __stdio_cleanup(void);
+void __stdio_seterrno(efi_status_t status);
+int __remove (const char_t *__filename, int isdir);
 
-void __stdio_cleanup()
+void __stdio_cleanup(void)
 {
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
     if(__argvutf8)
         BS->FreePool(__argvutf8);
 #endif
@@ -67,7 +70,7 @@ int fstat (FILE *__f, struct stat *__buf)
     efi_file_info_t info;
     uintn_t fsiz = (uintn_t)sizeof(efi_file_info_t);
     efi_status_t status;
-    int i;
+    uintn_t i;
 
     if(!__f || !__buf) {
         errno = EINVAL;
@@ -89,8 +92,8 @@ int fstat (FILE *__f, struct stat *__buf)
     for(i = 0; i < __blk_ndevs; i++)
         if(__f == (FILE*)__blk_devs[i].bio) {
             __buf->st_mode = S_IREAD | S_IWRITE | S_IFBLK;
-            __buf->st_size = (off_t)__blk_devs[i].bio->Media->BlockSize * (off_t)__blk_devs[i].bio->Media->LastBlock;
-            __buf->st_blocks = __blk_devs[i].bio->Media->LastBlock;
+            __buf->st_size = (off_t)__blk_devs[i].bio->Media->BlockSize * ((off_t)__blk_devs[i].bio->Media->LastBlock + 1);
+            __buf->st_blocks = __blk_devs[i].bio->Media->LastBlock + 1;
             return 0;
         }
     status = __f->GetInfo(__f, &infGuid, &fsiz, &info);
@@ -153,7 +156,10 @@ int __remove (const char_t *__filename, int isdir)
     efi_guid_t infGuid = EFI_FILE_INFO_GUID;
     efi_file_info_t info;
     uintn_t fsiz = (uintn_t)sizeof(efi_file_info_t), i;
-    FILE *f = fopen(__filename, CL("r"));
+    /* little hack to support read and write mode for Delete() and stat() without create mode or checks */
+    FILE *f = fopen(__filename, CL("*"));
+    if(errno)
+        return 1;
     if(!f || f == stdin || f == stdout || f == stderr || (__ser && f == (FILE*)__ser)) {
         errno = EBADF;
         return 1;
@@ -200,10 +206,12 @@ FILE *fopen (const char_t *__filename, const char_t *__modes)
     efi_guid_t infGuid = EFI_FILE_INFO_GUID;
     efi_file_info_t info;
     uintn_t fsiz = (uintn_t)sizeof(efi_file_info_t), par, i;
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
     wchar_t wcname[BUFSIZ];
 #endif
-    if(!__filename || !*__filename || !__modes || !*__modes) {
+    errno = 0;
+    if(!__filename || !*__filename || !__modes || (__modes[0] != CL('r') && __modes[0] != CL('w') && __modes[0] != CL('a') &&
+      __modes[0] != CL('*')) || (__modes[1] != 0 && __modes[1] != CL('d') && __modes[1] != CL('+'))) {
         errno = EINVAL;
         return NULL;
     }
@@ -221,7 +229,7 @@ FILE *fopen (const char_t *__filename, const char_t *__modes)
         return stderr;
     }
     if(!memcmp(__filename, CL("/dev/serial"), 11 * sizeof(char_t))) {
-        par = atol(__filename + 11);
+        par = (uintn_t)atol(__filename + 11);
         if(!__ser) {
             efi_guid_t serGuid = EFI_SERIAL_IO_PROTOCOL_GUID;
             status = BS->LocateProtocol(&serGuid, NULL, (void**)&__ser);
@@ -231,19 +239,22 @@ FILE *fopen (const char_t *__filename, const char_t *__modes)
         return (FILE*)__ser;
     }
     if(!memcmp(__filename, CL("/dev/disk"), 9 * sizeof(char_t))) {
-        par = atol(__filename + 9);
+        par = (uintn_t)atol(__filename + 9);
         if(!__blk_ndevs) {
             efi_guid_t bioGuid = EFI_BLOCK_IO_PROTOCOL_GUID;
             efi_handle_t handles[128];
             uintn_t handle_size = sizeof(handles);
-            status = BS->LocateHandle(ByProtocol, &bioGuid, NULL, handle_size, (efi_handle_t*)&handles);
+            status = BS->LocateHandle(ByProtocol, &bioGuid, NULL, &handle_size, (efi_handle_t*)&handles);
             if(!EFI_ERROR(status)) {
                 handle_size /= (uintn_t)sizeof(efi_handle_t);
+                /* workaround a bug in TianoCore, it reports zero size even though the data is in the buffer */
+                if(handle_size < 1)
+                    handle_size = (uintn_t)sizeof(handles) / sizeof(efi_handle_t);
                 __blk_devs = (block_file_t*)malloc(handle_size * sizeof(block_file_t));
                 if(__blk_devs) {
                     memset(__blk_devs, 0, handle_size * sizeof(block_file_t));
                     for(i = __blk_ndevs = 0; i < handle_size; i++)
-                        if(!EFI_ERROR(BS->HandleProtocol(handles[i], &bioGuid, (void **) &__blk_devs[__blk_ndevs].bio)) &&
+                        if(handles[i] && !EFI_ERROR(BS->HandleProtocol(handles[i], &bioGuid, (void **) &__blk_devs[__blk_ndevs].bio)) &&
                             __blk_devs[__blk_ndevs].bio && __blk_devs[__blk_ndevs].bio->Media &&
                             __blk_devs[__blk_ndevs].bio->Media->BlockSize > 0)
                                 __blk_ndevs++;
@@ -251,7 +262,7 @@ FILE *fopen (const char_t *__filename, const char_t *__modes)
                     __blk_ndevs = 0;
             }
         }
-        if(__blk_ndevs && par >= 0 && par < __blk_ndevs)
+        if(__blk_ndevs && par < __blk_ndevs)
             return (FILE*)__blk_devs[par].bio;
         errno = ENOENT;
         return NULL;
@@ -265,30 +276,41 @@ FILE *fopen (const char_t *__filename, const char_t *__modes)
         errno = ENODEV;
         return NULL;
     }
-    errno = 0;
     ret = (FILE*)malloc(sizeof(FILE));
     if(!ret) return NULL;
-#if USE_UTF8
+    /* normally write means read,write,create. But for remove (internal '*' mode), we need read,write without create
+     * also mode 'w' in POSIX means write-only (without read), but that's not working on certain firmware, we must
+     * pass read too. This poses a problem of truncating a write-only file, see issue #26, we have to do that manually */
+#ifndef UEFI_NO_UTF8
     mbstowcs((wchar_t*)&wcname, __filename, BUFSIZ - 1);
     status = __root_dir->Open(__root_dir, &ret, (wchar_t*)&wcname,
 #else
     status = __root_dir->Open(__root_dir, &ret, (wchar_t*)__filename,
 #endif
-        __modes[0] == CL('w') ? (EFI_FILE_MODE_WRITE | EFI_FILE_MODE_READ | EFI_FILE_MODE_CREATE) : EFI_FILE_MODE_READ,
+        __modes[0] == CL('w') || __modes[0] == CL('a') ? (EFI_FILE_MODE_WRITE | EFI_FILE_MODE_READ | EFI_FILE_MODE_CREATE) :
+            EFI_FILE_MODE_READ | (__modes[0] == CL('*') || __modes[1] == CL('+') ? EFI_FILE_MODE_WRITE : 0),
         __modes[1] == CL('d') ? EFI_FILE_DIRECTORY : 0);
     if(EFI_ERROR(status)) {
 err:    __stdio_seterrno(status);
         free(ret); return NULL;
     }
+    if(__modes[0] == CL('*')) return ret;
     status = ret->GetInfo(ret, &infGuid, &fsiz, &info);
     if(EFI_ERROR(status)) goto err;
     if(__modes[1] == CL('d') && !(info.Attribute & EFI_FILE_DIRECTORY)) {
-        free(ret); errno = ENOTDIR; return NULL;
+        ret->Close(ret); free(ret); errno = ENOTDIR; return NULL;
     }
     if(__modes[1] != CL('d') && (info.Attribute & EFI_FILE_DIRECTORY)) {
-        free(ret); errno = EISDIR; return NULL;
+        ret->Close(ret); free(ret); errno = EISDIR; return NULL;
     }
     if(__modes[0] == CL('a')) fseek(ret, 0, SEEK_END);
+    if(__modes[0] == CL('w')) {
+        /* manually truncate file size
+         * See https://github.com/tianocore/edk2/blob/master/MdePkg/Library/UefiFileHandleLib/UefiFileHandleLib.c
+         * function FileHandleSetSize */
+        info.FileSize = 0;
+        ret->SetInfo(ret, &infGuid, fsiz, &info);
+    }
     return ret;
 }
 
@@ -493,8 +515,8 @@ int vsnprintf(char_t *dst, size_t maxlen, const char_t *fmt, __builtin_va_list a
     uint8_t *mem;
     int64_t arg;
     int len, sign, i, j;
-    char_t *p, *orig=dst, *end = dst + maxlen - 1, tmpstr[19], pad, n;
-#if !defined(USE_UTF8) || !USE_UTF8
+    char_t *p, *orig=dst, *end = dst + maxlen - 1, tmpstr[24], pad, n;
+#ifdef UEFI_NO_UTF8
     char *c;
 #endif
     if(dst==NULL || fmt==NULL)
@@ -514,8 +536,8 @@ int vsnprintf(char_t *dst, size_t maxlen, const char_t *fmt, __builtin_va_list a
             }
             if(*fmt==CL('l')) fmt++;
             if(*fmt==CL('c')) {
-                arg = __builtin_va_arg(args, int);
-#if USE_UTF8
+                arg = __builtin_va_arg(args, uint32_t);
+#ifndef UEFI_NO_UTF8
                 if(arg<0x80) { *dst++ = arg; } else
                 if(arg<0x800) { *dst++ = ((arg>>6)&0x1F)|0xC0; *dst++ = (arg&0x3F)|0x80; } else
                 { *dst++ = ((arg>>12)&0x0F)|0xE0; *dst++ = ((arg>>6)&0x3F)|0x80; *dst++ = (arg&0x3F)|0x80; }
@@ -525,17 +547,14 @@ int vsnprintf(char_t *dst, size_t maxlen, const char_t *fmt, __builtin_va_list a
                 fmt++;
                 continue;
             } else
-            if(*fmt==CL('d')) {
-                arg = __builtin_va_arg(args, int);
+            if(*fmt==CL('d') || *fmt==CL('i')) {
+                arg = __builtin_va_arg(args, int64_t);
                 sign=0;
-                if((int)arg<0) {
+                if(arg<0) {
                     arg*=-1;
                     sign++;
                 }
-                if(arg>99999999999999999L) {
-                    arg=99999999999999999L;
-                }
-                i=18;
+                i=23;
                 tmpstr[i]=0;
                 do {
                     tmpstr[--i]=CL('0')+(arg%10);
@@ -544,8 +563,8 @@ int vsnprintf(char_t *dst, size_t maxlen, const char_t *fmt, __builtin_va_list a
                 if(sign) {
                     tmpstr[--i]=CL('-');
                 }
-                if(len>0 && len<18) {
-                    while(i>18-len) {
+                if(len>0 && len<23) {
+                    while(i && i>23-len) {
                         tmpstr[--i]=pad;
                     }
                 }
@@ -557,7 +576,7 @@ int vsnprintf(char_t *dst, size_t maxlen, const char_t *fmt, __builtin_va_list a
                 len = 16; pad = CL('0'); goto hex;
             } else
             if(*fmt==CL('x') || *fmt==CL('X')) {
-                arg = __builtin_va_arg(args, long int);
+                arg = __builtin_va_arg(args, int64_t);
 hex:            i=16;
                 tmpstr[i]=0;
                 do {
@@ -600,7 +619,7 @@ copystring:     if(p==NULL) {
                     }
                 }
             } else
-#if !defined(USE_UTF8) || !USE_UTF8
+#ifdef UEFI_NO_UTF8
             if(*fmt==L'S' || *fmt==L'Q') {
                 c = __builtin_va_arg(args, char*);
                 if(c==NULL) goto copystring;
@@ -659,7 +678,7 @@ copystring:     if(p==NULL) {
                     }
                     *dst++ = CL(' '); if(dst >= end) goto zro;
                     for(i = 0; i < 16; i++) {
-                        *dst++ = (mem[i] < 32 || mem[i] >= 127 ? CL('.') : mem[i]);
+                        *dst++ = (mem[i] < 32 || mem[i] >= 127 ? CL('.') : (char_t)mem[i]);
                         if(dst >= end) goto zro;
                     }
                     *dst++ = CL('\r'); if(dst >= end) goto zro;
@@ -674,7 +693,7 @@ put:        if(*fmt == CL('\n') && (orig == dst || *(dst - 1) != CL('\r'))) *dst
         fmt++;
     }
 zro:*dst=0;
-    return dst-orig;
+    return (int)(dst-orig);
 #undef needsescape
 }
 
@@ -685,23 +704,29 @@ int vsprintf(char_t *dst, const char_t *fmt, __builtin_va_list args)
 
 int sprintf(char_t *dst, const char_t* fmt, ...)
 {
+    int ret;
     __builtin_va_list args;
     __builtin_va_start(args, fmt);
-    return vsnprintf(dst, BUFSIZ, fmt, args);
+    ret = vsnprintf(dst, BUFSIZ, fmt, args);
+    __builtin_va_end(args);
+    return ret;
 }
 
 int snprintf(char_t *dst, size_t maxlen, const char_t* fmt, ...)
 {
+    int ret;
     __builtin_va_list args;
     __builtin_va_start(args, fmt);
-    return vsnprintf(dst, maxlen, fmt, args);
+    ret = vsnprintf(dst, maxlen, fmt, args);
+    __builtin_va_end(args);
+    return ret;
 }
 
 int vprintf(const char_t* fmt, __builtin_va_list args)
 {
     int ret;
     wchar_t dst[BUFSIZ];
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
     char_t tmp[BUFSIZ];
     ret = vsnprintf(tmp, BUFSIZ, fmt, args);
     mbstowcs(dst, tmp, BUFSIZ - 1);
@@ -714,9 +739,12 @@ int vprintf(const char_t* fmt, __builtin_va_list args)
 
 int printf(const char_t* fmt, ...)
 {
+    int ret;
     __builtin_va_list args;
     __builtin_va_start(args, fmt);
-    return vprintf(fmt, args);
+    ret = vprintf(fmt, args);
+    __builtin_va_end(args);
+    return ret;
 }
 
 int vfprintf (FILE *__stream, const char_t *__format, __builtin_va_list args)
@@ -724,8 +752,8 @@ int vfprintf (FILE *__stream, const char_t *__format, __builtin_va_list args)
     wchar_t dst[BUFSIZ];
     char_t tmp[BUFSIZ];
     uintn_t ret, i;
-#if USE_UTF8
-    ret = vsnprintf(tmp, BUFSIZ, __format, args);
+#ifndef UEFI_NO_UTF8
+    ret = (uintn_t)vsnprintf(tmp, BUFSIZ, __format, args);
     ret = mbstowcs(dst, tmp, BUFSIZ - 1);
 #else
     ret = vsnprintf(dst, BUFSIZ, __format, args);
@@ -741,43 +769,41 @@ int vfprintf (FILE *__stream, const char_t *__format, __builtin_va_list args)
     else if(__stream == stderr)
         ST->StdErr->OutputString(ST->StdErr, (wchar_t*)&dst);
     else if(__ser && __stream == (FILE*)__ser) {
-#if !defined(USE_UTF8) || !USE_UTF8
+#ifdef UEFI_NO_UTF8
         wcstombs((char*)&tmp, dst, BUFSIZ - 1);
 #endif
         __ser->Write(__ser, &ret, (void*)&tmp);
     } else
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
         __stream->Write(__stream, &ret, (void*)&tmp);
 #else
         __stream->Write(__stream, &ret, (void*)&dst);
 #endif
-    return ret;
+    return (int)ret;
 }
 
 int fprintf (FILE *__stream, const char_t *__format, ...)
 {
+    int ret;
     __builtin_va_list args;
     __builtin_va_start(args, __format);
-    return vfprintf(__stream, __format, args);
-}
-
-int getchar (void)
-{
-    efi_input_key_t key;
-    efi_status_t status = ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
-    return EFI_ERROR(status) ? -1 : key.UnicodeChar;
-
+    ret = vfprintf(__stream, __format, args);
+    __builtin_va_end(args);
+    return ret;
 }
 
 int getchar_ifany (void)
 {
-    efi_input_key_t key;
-    efi_status_t status = BS->CheckEvent(ST->ConIn->WaitForKey);
-    if(!status) {
-        status = ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
-        return EFI_ERROR(status) ? -1 : key.UnicodeChar;
-    }
-    return 0;
+    efi_input_key_t key = { 0 };
+    efi_status_t status = ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
+    return EFI_ERROR(status) ? 0 : key.UnicodeChar;
+}
+
+int getchar (void)
+{
+    uintn_t idx;
+    BS->WaitForEvent(1, &ST->ConIn->WaitForKey, &idx);
+    return getchar_ifany();
 }
 
 int putchar (int __c)

@@ -32,15 +32,17 @@
 #ifndef _UEFI_H_
 #define _UEFI_H_
 
+/*** configuration ***/
+/* #define UEFI_NO_UTF8 */                  /* use wchar_t in your application */
+/* #define UEFI_NO_TRACK_ALLOC */           /* do not track allocated buffers' size */
+/*** configuration ends ***/
+
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
-/* comment out this if you want to use wchar_t in your application */
-#define USE_UTF8            1
-
-/* get these from the compiler */
-#ifndef _STDINT_H
+/* get these from the compiler or the efi headers, only define if we have neither */
+#if !defined(_STDINT_H) && !defined(_GCC_STDINT_H) && !defined(_EFI_INCLUDE_)
 #define _STDINT_H
 typedef char                int8_t;
 typedef unsigned char       uint8_t;
@@ -82,7 +84,7 @@ typedef uint64_t efi_physical_address_t;
 typedef uint64_t efi_virtual_address_t;
 typedef void     *efi_handle_t;
 typedef void     *efi_event_t;
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
 typedef char    char_t;
 #define CL(a)   a
 extern char *__argvutf8;
@@ -129,9 +131,9 @@ typedef struct {
 #ifndef __WCHAR_TYPE__
 # define __WCHAR_TYPE__ short
 #endif
-#define EFIERR(a)           (0x8000000000000000 | a)
+#define EFIERR(a)           (0x8000000000000000 | (unsigned int)(a))
 #define EFI_ERROR_MASK      0x8000000000000000
-#define EFIERR_OEM(a)       (0xc000000000000000 | a)
+#define EFIERR_OEM(a)       (0xc000000000000000 | (unsigned int)(a))
 
 #define BAD_POINTER         0xFBFBFBFBFBFBFBFB
 #define MAX_ADDRESS         0xFFFFFFFFFFFFFFFF
@@ -520,6 +522,8 @@ typedef enum {
     EfiMemoryMappedIO,
     EfiMemoryMappedIOPortSpace,
     EfiPalCode,
+    EfiPersistentMemory,
+    EfiUnacceptedMemoryType,
     EfiMaxMemoryType
 } efi_memory_type_t;
 
@@ -704,19 +708,19 @@ typedef void (EFIAPI *efi_event_notify_t)(efi_event_t Event, void *Context);
 typedef efi_status_t (EFIAPI *efi_create_event_t)(uint32_t Type, efi_tpl_t NotifyTpl, efi_event_notify_t NotifyFunction,
     void *NextContext, efi_event_t *Event);
 typedef efi_status_t (EFIAPI *efi_set_timer_t)(efi_event_t Event, efi_timer_delay_t Type, uint64_t TriggerTime);
-typedef efi_status_t (EFIAPI *efi_wait_for_event_t)(uintn_t NumberOfEvents, efi_event_t *Event, uintn_t Index);
+typedef efi_status_t (EFIAPI *efi_wait_for_event_t)(uintn_t NumberOfEvents, efi_event_t *Event, uintn_t *Index);
 typedef efi_status_t (EFIAPI *efi_signal_event_t)(efi_event_t Event);
 typedef efi_status_t (EFIAPI *efi_close_event_t)(efi_event_t Event);
 typedef efi_status_t (EFIAPI *efi_check_event_t)(efi_event_t Event);
 typedef efi_status_t (EFIAPI *efi_handle_protocol_t)(efi_handle_t Handle, efi_guid_t *Protocol, void **Interface);
 typedef efi_status_t (EFIAPI *efi_register_protocol_notify_t)(efi_guid_t *Protocol, efi_event_t Event, void **Registration);
 typedef efi_status_t (EFIAPI *efi_locate_handle_t)(efi_locate_search_type_t SearchType, efi_guid_t *Protocol,
-    void *SearchKey, uintn_t BufferSize, efi_handle_t *Buffer);
+    void *SearchKey, uintn_t *BufferSize, efi_handle_t *Buffer);
 typedef efi_status_t (EFIAPI *efi_locate_device_path_t)(efi_guid_t *Protocol, efi_device_path_t **DevicePath,
     efi_handle_t *Device);
 typedef efi_status_t (EFIAPI *efi_install_configuration_table_t)(efi_guid_t *Guid, void *Table);
 typedef efi_status_t (EFIAPI *efi_image_load_t)(boolean_t BootPolicy, efi_handle_t ParentImageHandle, efi_device_path_t *FilePath,
-    void *SourceBuffer, uintn_t SourceSie, efi_handle_t *ImageHandle);
+    void *SourceBuffer, uintn_t SourceSize, efi_handle_t *ImageHandle);
 typedef efi_status_t (EFIAPI *efi_image_start_t)(efi_handle_t ImageHandle, uintn_t *ExitDataSize, wchar_t **ExitData);
 typedef efi_status_t (EFIAPI *efi_exit_t)(efi_handle_t ImageHandle, efi_status_t ExitStatus, uintn_t ExitDataSize,
     wchar_t *ExitData);
@@ -738,7 +742,7 @@ typedef efi_status_t (EFIAPI *efi_open_protocol_information_t)(efi_handle_t Hand
 typedef efi_status_t (EFIAPI *efi_protocols_per_handle_t)(efi_handle_t Handle, efi_guid_t ***ProtocolBuffer,
     uintn_t *ProtocolBufferCount);
 typedef efi_status_t (EFIAPI *efi_locate_handle_buffer_t)(efi_locate_search_type_t SearchType, efi_guid_t *Protocol,
-    void *SearchKey, uintn_t NoHandles, efi_handle_t **Handles);
+    void *SearchKey, uintn_t *NoHandles, efi_handle_t **Handles);
 typedef efi_status_t (EFIAPI *efi_locate_protocol_t)(efi_guid_t *Protocol, void *Registration, void **Interface);
 typedef efi_status_t (EFIAPI *efi_calculate_crc32_t)(void *Data, uintn_t DataSize, uint32_t *Crc32);
 
@@ -1296,7 +1300,7 @@ extern void free (void *__ptr);
 extern void abort (void);
 extern void exit (int __status);
 /* exit Boot Services function. Returns 0 on success. */
-extern int exit_bs();
+extern int exit_bs(void);
 extern void *bsearch (const void *__key, const void *__base, size_t __nmemb, size_t __size, __compar_fn_t __compar);
 extern void qsort (void *__base, size_t __nmemb, size_t __size, __compar_fn_t __compar);
 extern int mblen (const char *__s, size_t __n);
@@ -1412,6 +1416,7 @@ extern time_t time(time_t *__timer);
 extern unsigned int sleep (unsigned int __seconds);
 extern int usleep (unsigned long int __useconds);
 extern int unlink (const wchar_t *__filename);
+extern int rmdir (const wchar_t *__filename);
 
 #ifdef  __cplusplus
 }

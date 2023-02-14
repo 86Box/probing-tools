@@ -34,6 +34,7 @@
 extern int main(int argc, char_t **argv);
 
 /* definitions for elf relocations */
+#ifndef __clang__
 typedef uint64_t Elf64_Xword;
 typedef	int64_t  Elf64_Sxword;
 typedef uint64_t Elf64_Addr;
@@ -57,6 +58,7 @@ typedef struct
 } Elf64_Rel;
 #define ELF64_R_TYPE(i)     ((i) & 0xffffffff)
 #define R_X86_64_RELATIVE   8       /* Adjust by program base */
+#endif
 
 /* globals to store system table pointers */
 efi_handle_t IM = NULL;
@@ -64,12 +66,12 @@ efi_system_table_t *ST = NULL;
 efi_boot_services_t *BS = NULL;
 efi_runtime_services_t *RT = NULL;
 efi_loaded_image_protocol_t *LIP = NULL;
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
 char *__argvutf8 = NULL;
 #endif
 
 /* we only need one .o file, so use inline Assembly here */
-void bootstrap()
+void bootstrap(void)
 {
     __asm__ __volatile__ (
     /* call init in C */
@@ -137,7 +139,7 @@ void bootstrap()
 /**
  * Initialize POSIX-UEFI and call the application's main() function
  */
-int uefi_init (
+efi_status_t uefi_init (
 #ifndef __clang__
     uintptr_t ldbase, Elf64_Dyn *dyn, efi_system_table_t *systab, efi_handle_t image
 #else
@@ -150,10 +152,10 @@ int uefi_init (
     efi_shell_interface_protocol_t *shi = NULL;
     efi_guid_t lipGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
     efi_status_t status;
-    int argc = 0, i;
+    int argc = 0, i, ret;
     wchar_t **argv = NULL;
-#if USE_UTF8
-    int ret, j;
+#ifndef UEFI_NO_UTF8
+    int j;
     char *s;
 #endif
 #ifndef __clang__
@@ -172,7 +174,7 @@ int uefi_init (
     if (rel && relent) {
         while (relsz > 0) {
             if(ELF64_R_TYPE (rel->r_info) == R_X86_64_RELATIVE)
-                { addr = (unsigned long *)(ldbase + rel->r_offset); *addr += ldbase; break; }
+                { addr = (unsigned long *)(ldbase + rel->r_offset); *addr += ldbase; }
             rel = (Elf64_Rel*) ((char *) rel + relent);
             relsz -= relent;
         }
@@ -189,6 +191,10 @@ int uefi_init (
     "	orw $3 << 9, %ax\n"
     "	mov %rax, %cr4\n"
     );
+    /* failsafes, should never happen */
+    if(!image || !systab || !systab->BootServices || !systab->BootServices->HandleProtocol ||
+        !systab->BootServices->OpenProtocol || !systab->BootServices->AllocatePool || !systab->BootServices->FreePool)
+            return EFI_UNSUPPORTED;
     /* save EFI pointers and loaded image into globals */
     IM = image;
     ST = systab;
@@ -197,26 +203,26 @@ int uefi_init (
     BS->HandleProtocol(image, &lipGuid, (void **)&LIP);
     /* get command line arguments */
     status = BS->OpenProtocol(image, &shpGuid, (void **)&shp, image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
-    if(!EFI_ERROR(status) && shp) { argc = shp->Argc; argv = shp->Argv; }
+    if(!EFI_ERROR(status) && shp) { argc = (int)shp->Argc; argv = shp->Argv; }
     else {
         /* if shell 2.0 failed, fallback to shell 1.0 interface */
         status = BS->OpenProtocol(image, &shiGuid, (void **)&shi, image, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
-        if(!EFI_ERROR(status) && shi) { argc = shi->Argc; argv = shi->Argv; }
+        if(!EFI_ERROR(status) && shi) { argc = (int)shi->Argc; argv = shi->Argv; }
     }
     /* call main */
-#if USE_UTF8
+#ifndef UEFI_NO_UTF8
     if(argc && argv) {
-        ret = (argc + 1) * (sizeof(uintptr_t) + 1);
+        ret = (argc + 1) * ((int)sizeof(uintptr_t) + 1);
         for(i = 0; i < argc; i++)
             for(j = 0; argv[i] && argv[i][j]; j++)
                 ret += argv[i][j] < 0x80 ? 1 : (argv[i][j] < 0x800 ? 2 : 3);
-        status = BS->AllocatePool(LIP ? LIP->ImageDataType : EfiLoaderData, ret, (void **)&__argvutf8);
+        status = BS->AllocatePool(LIP ? LIP->ImageDataType : EfiLoaderData, (uintn_t)ret, (void **)&__argvutf8);
         if(EFI_ERROR(status) || !__argvutf8) { argc = 0; __argvutf8 = NULL; }
         else {
-            s = __argvutf8 + argc * sizeof(uintptr_t);
+            s = __argvutf8 + argc * (int)sizeof(uintptr_t);
             *((uintptr_t*)s) = (uintptr_t)0; s += sizeof(uintptr_t);
             for(i = 0; i < argc; i++) {
-                *((uintptr_t*)(__argvutf8 + i * sizeof(uintptr_t))) = (uintptr_t)s;
+                *((uintptr_t*)(__argvutf8 + i * (int)sizeof(uintptr_t))) = (uintptr_t)s;
                 for(j = 0; argv[i] && argv[i][j]; j++) {
                     if(argv[i][j]<0x80) { *s++ = argv[i][j]; } else
                     if(argv[i][j]<0x800) { *s++ = ((argv[i][j]>>6)&0x1F)|0xC0; *s++ = (argv[i][j]&0x3F)|0x80; } else
@@ -228,8 +234,8 @@ int uefi_init (
     }
     ret = main(argc, (char**)__argvutf8);
     if(__argvutf8) BS->FreePool(__argvutf8);
-    return ret;
 #else
-    return main(argc, argv);
+    ret = main(argc, argv);
 #endif
+    return ret ? EFIERR(ret) : EFI_SUCCESS;
 }

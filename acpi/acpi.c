@@ -24,111 +24,109 @@
 #include "clib.h"
 
 
-static char	dummy_buf[256];
-
-
-void
-probe_intel(uint8_t dev, uint8_t func)
+static void
+try_sleep()
 {
-    uint8_t status;
-    uint16_t acpi_base, devctl;
-    int type;
+    unsigned int port, type;
+    char dummy_buf[256];
 
-    /* Read and print ACPI I/O base. */
-    pci_writew(0, dev, func, 0x40, 0x4001);
-    acpi_base = pci_readw(0, dev, func, 0x40);
-    printf("ACPI base register = %04X\n", acpi_base);
-    acpi_base &= 0xffc0;
-
-    /* Read and print SMI traps. */
-    devctl = inl(acpi_base + 0x2e);
-    status = pci_readb(0, dev, func, 0x62);
-    printf("SMI traps: Dev9  = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x60), status & 0x0f,
-	   (status & 0x20) ? '√' : ' ', (devctl & 0x0008) ? '√' : ' ');
-    status = pci_readb(0, dev, func, 0x66);
-    printf("           Dev10 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x64), status & 0x0f,
-	   (status & 0x20) ? '√' : ' ', (devctl & 0x0020) ? '√' : ' ');
-    status = pci_readb(0, dev, func, 0x6a);
-    printf("           Dev12 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x68), status & 0x0f,
-	   (status & 0x10) ? '√' : ' ', (devctl & 0x0100) ? '√' : ' ');
-    status = pci_readb(0, dev, func, 0x72);
-    printf("           Dev13 = %04X+%X  Decode[%c] Trap[%c]\n", pci_readw(0, dev, func, 0x70), status & 0x0f,
-	   (status & 0x10) ? '√' : ' ', (devctl & 0x0200) ? '√' : ' ');
-
-    /* Print contents of both PM1a control registers. */
-    printf("PMCNTRL: %04X=%04X %04X=%04X\n", acpi_base + 0x04, inw(acpi_base + 0x04), acpi_base + 0x40, inw(acpi_base + 0x40));
+    /* Prompt for port address. */
+    printf("Enter port address to try: ");
+    scanf("%x%*c", &port);
 
     /* Prompt for sleep type. */
     printf("Enter hex sleep type to try: ");
     scanf("%x%*c", &type);
 
-    /* Try sleep through alternate port. */
-    printf("Press ENTER to try sleep %02X through register %04X...", type, acpi_base + 0x40);
+    /* Try sleep through selected port. */
+    printf("Press ENTER to try sleep %02X through register %04X...", type, port);
     gets(dummy_buf);
-    outw(acpi_base + 0x40, 0x2000 | (type << 10));
-
-    /* Try sleep through main port. */
-    printf("Nothing?\nPress ENTER to try sleep %02X through register %04X...", type, acpi_base + 0x04);
-    gets(dummy_buf);
-    outw(acpi_base + 0x04, 0x2000 | (type << 10));
-    printf("Nothing still?\n");
+    outw(port, 0x2000 | (type << 10));
+    printf("Nothing?\n");
 }
 
 
-void
+static void
+probe_intel(uint8_t dev, uint8_t func)
+{
+    uint8_t status;
+    uint16_t acpi_base, port, devctl;
+
+    /* Read and print ACPI I/O base and PMCNTRL value. */
+    pci_writew(0, dev, func, 0x40, 0x4001);
+    port = acpi_base & 0xffc0;
+    printf("ACPI base register = %04X              PMCNTRL[%04X] Val[%04X]\n", acpi_base, port | 0x04, inw(port | 0x04));
+    acpi_base = port;
+
+    /* Read and print SMI trap status, ports and values. */
+    devctl = inl(acpi_base + 0x2e);
+    port = pci_readw(0, dev, func, 0x60);
+    status = pci_readb(0, dev, func, 0x62);
+    printf("SMI traps: Dev9  = %04X+%X  Decode[%c] Trap[%c] Val[%04X]\n", port, status & 0x0f,
+	   (status & 0x20) ? '√' : ' ', (devctl & 0x0008) ? '√' : ' ', inw(port));
+    port = pci_readw(0, dev, func, 0x64);
+    status = pci_readb(0, dev, func, 0x66);
+    printf("           Dev10 = %04X+%X  Decode[%c] Trap[%c] Val[%04X]\n", port, status & 0x0f,
+	   (status & 0x20) ? '√' : ' ', (devctl & 0x0020) ? '√' : ' ', inw(port));
+    port = pci_readw(0, dev, func, 0x68);
+    status = pci_readb(0, dev, func, 0x6a);
+    printf("           Dev12 = %04X+%X  Decode[%c] Trap[%c] Val[%04X]\n", port, status & 0x0f,
+	   (status & 0x10) ? '√' : ' ', (devctl & 0x0100) ? '√' : ' ', inw(port));
+    port = pci_readw(0, dev, func, 0x70);
+    status = pci_readb(0, dev, func, 0x72);
+    printf("           Dev13 = %04X+%X  Decode[%c] Trap[%c] Val[%04X]\n", port, status & 0x0f,
+	   (status & 0x10) ? '√' : ' ', (devctl & 0x0200) ? '√' : ' ', inw(port));
+
+    /* Run interactive sequence. */
+    try_sleep();
+}
+
+
+static void
 probe_via(uint8_t dev, uint8_t func, uint16_t dev_id)
 {
     uint8_t mask;
-    uint16_t acpi_base, glben, status;
-    int type;
+    uint16_t acpi_base, port, glben, status;
 
-    /* Read and print ACPI I/O base. */
+    /* Read and print ACPI I/O base and PMCNTRL value. */
     acpi_base = pci_readw(0, dev, func, (dev_id == 0x3040) ? 0x20 : 0x48);
-    printf("ACPI base register = %04X\n", acpi_base);
-    acpi_base &= 0xff00;
+    port = acpi_base & ((dev_id == 0x3040) ? 0xff00 : 0xff80);
+    printf("ACPI base register = %04X              PMCNTRL[%04X] Val[%04X]\n", acpi_base, port | 0x04, inw(port | 0x04));
+    acpi_base = port;
 
-    /* Print contents of both PM1a control registers. */
-    printf("PMCNTRL: %04X=%04X %04X=%04X\n", acpi_base + 0x04, inw(acpi_base + 0x04), acpi_base + 0xf0, inw(acpi_base + 0xf0));
-
-    /* Read and print SMI traps. */
+    /* Read and print SMI trap status, ports and values. */
     if (dev_id >= 0x3050) {
-	mask = pci_readb(0, dev, 0, 0x80);
 	glben = inw(acpi_base + 0x2a);
+    mask = pci_readb(0, dev, 0, 0x80);
 	if (dev_id == 0x3050) {
 		status = pci_readw(0, dev, 0, 0x76);
-		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
-		       (status & 0x0010) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ');
-		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
-		       (status & 0x0020) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ');
+        port = pci_readw(0, dev, 0, 0x78);
+		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, mask & 0x0f,
+		       (status & 0x0010) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ', inw(port));
+        port = pci_readw(0, dev, 0, 0x7a);
+		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, (mask >> 4) & 0x0f,
+		       (status & 0x0020) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ', inw(port));
 	} else {
 		status = pci_readw(0, dev, 0, 0x8b);
-		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x78), mask & 0x0f,
-		       (status & 0x0100) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ');
-		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x7a), (mask >> 4) & 0x0f,
-		       (status & 0x0200) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ');
+        port = pci_readw(0, dev, 0, 0x78);
+		printf("SMI traps: PCS0 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, mask & 0x0f,
+		       (status & 0x0100) ? '√' : ' ', (status & 0x1000) ? '√' : ' ', (glben & 0x4000) ? '√' : ' ', inw(port));
+        port = pci_readw(0, dev, 0, 0x7a);
+		printf("           PCS1 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, (mask >> 4) & 0x0f,
+		       (status & 0x0200) ? '√' : ' ', (status & 0x2000) ? '√' : ' ', (glben & 0x8000) ? '√' : ' ', inw(port));
+        glben = inw(acpi_base + 0x42); /* extended I/O traps */
 		mask = pci_readb(0, dev, 0, 0x8a);
-		glben = inw(acpi_base + 0x42); /* extended I/O trap */
-		printf("           PCS2 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8c), mask & 0x0f,
-		       (status & 0x0400) ? '√' : ' ', (status & 0x4000) ? '√' : ' ', (glben & 0x0001) ? '√' : ' ');
-		printf("           PCS3 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c]\n", pci_readw(0, dev, 0, 0x8e), (mask >> 4) & 0x0f,
-		       (status & 0x0800) ? '√' : ' ', (status & 0x8000) ? '√' : ' ', (glben & 0x0002) ? '√' : ' ');
+        port = pci_readw(0, dev, 0, 0x8c);
+		printf("           PCS2 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, mask & 0x0f,
+		       (status & 0x0400) ? '√' : ' ', (status & 0x4000) ? '√' : ' ', (glben & 0x0001) ? '√' : ' ', inw(port));
+        port = pci_readw(0, dev, 0, 0x8e);
+		printf("           PCS3 = %04X+%X  Decode[%c] IntIO[%c] Trap[%c] Val[%04X]\n", port, (mask >> 4) & 0x0f,
+		       (status & 0x0800) ? '√' : ' ', (status & 0x8000) ? '√' : ' ', (glben & 0x0002) ? '√' : ' ', inw(port));
 	}
     }
 
-    /* Prompt for sleep type. */
-    printf("Enter hex sleep type to try: ");
-    scanf("%x%*c", &type);
-
-    /* Try sleep through alternate port. */
-    printf("Press ENTER to try sleep %02X through register %04X...", type, acpi_base + 0xf0);
-    gets(dummy_buf);
-    outw(acpi_base + 0xf0, 0x2000 | (type << 10));
-
-    /* Try sleep through main port. */
-    printf("Nothing?\nPress ENTER to try sleep %02X through register %04X...", type, acpi_base + 0x04);
-    gets(dummy_buf);
-    outw(acpi_base + 0x04, 0x2000 | (type << 10));
-    printf("Nothing still?\n");
+    /* Run interactive sequence. */
+    try_sleep();
 }
 
 

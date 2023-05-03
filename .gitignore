@@ -24,4 +24,6 @@ pci?????.bin
 *.exe
 *.com
 *.efi
+pcireg/pcireg
+ac97/ac97
 PCIIDS.BIN

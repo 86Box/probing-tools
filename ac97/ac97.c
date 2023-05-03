@@ -519,7 +519,7 @@ main(int argc, char **argv)
         return 1;
 
     /* Set silent mode. */
-    if ((argc >= 1) && !strcmp(argv[1], "-s"))
+    if ((argc > 1) && !strcmp(argv[1], "-s"))
         silent = 1;
 
     /* Scan PCI bus 0. */

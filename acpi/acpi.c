@@ -32,7 +32,7 @@ try_sleep()
     char         dummy_buf[256];
 
     /* Prompt for port address. */
-    printf("Enter port address to try: ");
+    printf("\nEnter port address to try: ");
     scanf("%x%*c", &port);
 
     /* Prompt for sleep type. */
@@ -128,6 +128,26 @@ probe_via(uint8_t dev, uint8_t func, uint16_t dev_id)
     try_sleep();
 }
 
+static void
+probe_ali(uint8_t dev, uint8_t func)
+{
+    uint16_t acpi_base, port;
+
+    /* Read and print ACPI I/O base and PMCNTRL value. */
+    acpi_base = pci_readw(0, dev, func, 0x10);
+    port      = acpi_base & 0xffc0;
+    printf("ACPI base register = %04X              PMCNTRL[%04X] Val[%04X]\n", acpi_base, port | 0x04, inw(port | 0x04));
+    acpi_base = port;
+
+    /* Read and print SMI trap status, ports and values. */
+    port = pci_readw(0, dev, func, 0xa4);
+    printf("SMI traps: IOGC = %04X+%X  Trap[%c]\n", port & 0xfffc, (port & 0x0003) << 2,
+           (pci_readw(0, dev, func, 0x44) & 0x8000) ? '√' : ' ');
+
+    /* Run interactive sequence. */
+    try_sleep();
+}
+
 int
 main(int argc, char **argv)
 {
@@ -144,11 +164,20 @@ main(int argc, char **argv)
 
     /* Scan PCI bus 0. */
     for (dev = 0; dev < 32; dev++) {
-        /* Single-function devices are definitely not the southbridge. */
+        /* Determine and execute southbridge-specific function for ALi. */
+        ven_id = pci_readw(0, dev, 0, 0x00);
+        dev_id = pci_readw(0, dev, 0, 0x02);
+        if ((ven_id == 0x10b9) && (dev_id == 0x7101)) {
+            printf("Found ALi M7101 ACPI revision %02X at device %02X function %d\n", pci_readb(0, dev, 0, 0x08), dev, 0);
+            probe_ali(dev, 0);
+            return 0;
+        }
+
+        /* Single-function devices are definitely not other vendors' southbridges. */
         if (!(pci_readb(0, dev, 0, 0x0e) & 0x80))
             continue;
 
-        /* Determine and execute southbridge-specific function. */
+        /* Determine and execute southbridge-specific function for other vendors. */
         ven_id = pci_readw(0, dev, 3, 0x00);
         dev_id = pci_readw(0, dev, 3, 0x02);
         if ((ven_id == 0x8086) && (dev_id == 0x7113)) {

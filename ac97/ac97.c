@@ -214,6 +214,70 @@ audiopci_probe(uint16_t dev_id)
 }
 
 static void
+emu10k1_codec_wait()
+{
+    /* Wait for AC97ADDRESS_READY to be set. */
+    for (i = 1; i; i++) {
+        if (inb(io_base | 0x1e) & 0x80)
+            break;
+    }
+    if (!i)
+        printf("[!]");
+}
+
+static uint16_t
+emu10k1_codec_read(uint8_t reg)
+{
+    /* Wait for AC97ADDRESS_READY to be set. */
+    emu10k1_codec_wait();
+
+    /* Set address. */
+    outb(io_base | 0x1e, reg);
+
+    /* Perform read. */
+    return inw(io_base | 0x1c);
+}
+
+static void
+emu10k1_codec_write(uint8_t reg, uint16_t val)
+{
+    /* Wait for AC97ADDRESS_READY to be set. */
+    emu10k1_codec_wait();
+
+    /* Set address. */
+    outb(io_base | 0x1e, reg);
+
+    /* Perform write. */
+    outw(io_base | 0x1c, val);
+}
+
+static void
+emu10k1_probe(uint16_t dev_id)
+{
+    uint8_t rev;
+
+    /* Get revision. */
+    rev = pci_readb(bus, dev, func, 0x08);
+
+    /* Print controller information. */
+    printf("Found EMU10K%s revision %02X at bus %02X device %02X function %d\n", (dev_id == 0x0002) ? "1" : ((dev_id == 0x0006) ? "1X" : "2"), rev, bus, dev, func);
+    printf("Subsystem ID [%04X:%04X]\n", pci_readw(bus, dev, func, 0x2c), pci_readw(bus, dev, func, 0x2e));
+
+    /* Get I/O BAR. */
+    io_base = pci_get_io_bar(bus, dev, func, 0x10, 64, "Main");
+    if (!io_base)
+        return;
+
+    printf("GPIO readout [%X]", inb(io_base | 0x15) & 0x7c);
+    if (dev_id != 0x0002) /* EMU10K1X and EMU10K2 GPIO where EMU10K1 had the MPU-401 */
+        printf(" [%04X]", inw(io_base | 0x18));
+    printf("\n");
+
+    /* Perform codec probe. */
+    codec_probe(emu10k1_codec_read, emu10k1_codec_write);
+}
+
+static void
 via_codec_wait(multi_t *regval, uint16_t additional)
 {
     uint16_t mask = 0x0100;
@@ -430,6 +494,9 @@ pci_scan_callback(uint8_t this_bus, uint8_t this_dev, uint8_t this_func,
     if ((ven_id == 0x1274) && (dev_id != 0x5000)) {
         print_spacer();
         audiopci_probe(dev_id);
+    } else if ((ven_id == 0x1102) && ((dev_id == 0x0002) || (dev_id == 0x0004) || (dev_id == 0x0006))) {
+        print_spacer();
+        emu10k1_probe(dev_id);
     } else if ((ven_id == 0x1106) && ((dev_id == 0x3058) || (dev_id == 0x3059))) {
         print_spacer();
         via_probe(dev_id);

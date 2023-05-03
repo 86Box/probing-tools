@@ -633,7 +633,7 @@ unknown_device: /* Look up class ID. */
                         strcpy(&buf[term_width - 32], "... ");
                     sprintf(&buf[strlen(buf)], "(%02X)", dev_rev_class.u8[0]);
                 }
-                printf(buf);
+                printf("%s", buf);
 
                 /* Move on to the next line if the terminal didn't already do that for us. */
                 if (term_width > (strlen(buf) + 24))
@@ -790,7 +790,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Print vendor name if found. */
     temp = pciids_get_vendor(reg_val.u16[0]);
     if (temp) {
-        printf(temp);
+        printf("%s", temp);
         free(temp);
     } else {
         printf("[Unknown]");
@@ -802,7 +802,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Print device name if found. */
     temp = pciids_get_device(reg_val.u16[1]);
     if (temp) {
-        printf(temp);
+        printf("%s", temp);
         free(temp);
     } else {
         printf("[Unknown]");
@@ -843,7 +843,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
             /* Print subvendor name if found. */
             temp = pciids_get_vendor(reg_val.u16[0]);
             if (temp) {
-                printf(temp);
+                printf("%s", temp);
                 free(temp);
             } else {
                 printf("[Unknown]");
@@ -855,7 +855,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
             /* Print subdevice ID if found. */
             temp = pciids_get_subdevice(reg_val.u16[0], reg_val.u16[1]);
             if (temp) {
-                printf(temp);
+                printf("%s", temp);
                 free(temp);
             } else {
                 printf("[Unknown]");
@@ -885,7 +885,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Print class name if found. */
     temp = pciids_get_class(reg_val.u8[3]);
     if (temp) {
-        printf(temp);
+        printf("%s", temp);
         free(temp);
     } else {
         printf("[Unknown]");
@@ -897,7 +897,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Print subclass name if found. */
     temp = pciids_get_subclass(reg_val.u8[3], reg_val.u8[2]);
     if (temp) {
-        printf(temp);
+        printf("%s", temp);
         free(temp);
     } else {
         printf("[Unknown]");
@@ -909,7 +909,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     /* Print programming interface name if found. */
     temp = pciids_get_progif(reg_val.u8[3], reg_val.u8[2], reg_val.u8[1]);
     if (temp) {
-        printf(temp);
+        printf("%s", temp);
         free(temp);
     } else {
         printf("[Unknown]");

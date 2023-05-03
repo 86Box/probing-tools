@@ -40,7 +40,11 @@ CC		= wcc
 CP437_CONV	= y
 !else
 CC		= wcc386
+!if "$(SYSTEM)" == "PMODEW"
+CP437_CONV	= y
+!else
 CP437_CONV	= n
+!endif
 !endif
 LINK		= wlink
 

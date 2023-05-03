@@ -15,7 +15,7 @@
 #		Copyright 2021 RichardG.
 #
 
-SYSTEM	= DOS
+SYSTEM	= PMODEW
 OBJS	= pcireg.obj clib_pci.obj clib_std.obj clib_sys.obj clib_term.obj
 DEST	= PCIREG.EXE
 

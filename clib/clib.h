@@ -36,8 +36,11 @@
 #endif
 
 /* Platform-specific macros. */
-#ifndef __POSIX_UEFI__
+#ifdef __POSIX_UEFI__
+#    define FOPEN_BINARY
+#else
 #    define FMT_FLOAT_SUPPORTED 1
+#    define FOPEN_BINARY "b"
 #endif
 #if !defined(__WATCOMC__) || defined(M_I386)
 #    define IS_32BIT 1

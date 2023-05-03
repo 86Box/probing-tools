@@ -30,6 +30,7 @@
 #    include <stdlib.h>
 #    ifdef __WATCOMC__
 #        include <dos.h>
+#        include <i86.h>
 #    endif
 #endif
 #include "clib_pci.h"
@@ -82,11 +83,18 @@ static const char *devsel[] = {
 
 static int   term_width;
 static FILE *pciids_f = NULL;
-#if defined(__WATCOMC__) && !defined(M_I386)
-static union REGPACK rp;
+#if defined(__WATCOMC__)
+static union REGS   regs;
+static struct SREGS seg_regs;
+#    pragma pack(push, 1)
+static struct PACKED {
+    uint32_t edi, esi, ebp, unused, ebx, edx, ecx, eax;
+    uint16_t flags, es, ds, fs, gs, ip, cs, sp, ss;
+} dpmi_regs;
+#    pragma pack(pop)
 #endif
 
-#pragma pack(push, 0)
+#pragma pack(push, 1)
 static struct PACKED {
     uint32_t device_db_offset,
         subdevice_db_offset,
@@ -126,7 +134,7 @@ static struct PACKED {
     uint32_t string_offset;
 } pciids_progif;
 
-#if defined(__WATCOMC__) && !defined(M_I386)
+#if defined(__WATCOMC__)
 typedef struct {
     uint8_t bus, dev;
     struct {
@@ -138,7 +146,9 @@ typedef struct {
 typedef struct {
     uint16_t len;
     union {
-        void far           *data_ptr;
+        struct {
+            uint16_t offset, segment;
+        } data_ptr;
         irq_routing_entry_t entry[1];
     };
 } irq_routing_table_t;
@@ -153,7 +163,7 @@ pciids_open_database()
         return 0;
 
     /* Open file, and stop if the open failed or the header couldn't be read. */
-    pciids_f = fopen("PCIIDS.BIN", "rb");
+    pciids_f = fopen("PCIIDS.BIN", "r" FOPEN_BINARY);
     if (pciids_f && (fread(&pciids_header, sizeof(pciids_header), 1, pciids_f) < 1)) {
         fclose(pciids_f);
         pciids_f = NULL;
@@ -972,7 +982,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     return 0;
 }
 
-#if defined(__WATCOMC__) && !defined(M_I386)
+#if defined(__WATCOMC__)
 static int
 comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
@@ -982,51 +992,81 @@ comp_irq_routing_entry(const void *elem1, const void *elem2)
 }
 
 static int
+free_realmode(uint16_t segment)
+{
+    memset(&regs, 0, sizeof(regs));
+    regs.w.ax = 0x0101;
+    regs.w.dx = segment;
+    int386(0x31, &regs, &regs);
+    return !regs.w.cflag;
+}
+
+static int
 dump_steering_table(char mode)
 {
-    int                  i, j, entries;
-    uint8_t              irq_bitmap[256], temp[4];
-    uint16_t             buf_size = 1024, dev_class;
-    irq_routing_table_t *table;
-    irq_routing_entry_t *entry;
+    int                      i, j, entries;
+    uint8_t                  irq_bitmap[256], temp[4];
+    uint16_t                 buf_size = 1024, table_segment, dev_class;
+    irq_routing_table_t far *table;
+    irq_routing_entry_t far *entry;
+    uint32_t                 ttt;
 
-    /* Allocate buffer for PCI BIOS. */
+    /* Allocate real mode memory buffer for PCI BIOS. */
 retry_buf:
-    table = malloc(buf_size);
-    if (!table) {
-        printf("Failed to allocate %d bytes.\n", buf_size);
+    memset(&regs, 0, sizeof(regs));
+    regs.w.ax = 0x0100;
+    regs.w.bx = (buf_size + 15) >> 4;
+    int386(0x31, &regs, &regs);
+    if (regs.w.cflag) {
+        printf("Failed to allocate %d bytes. (AX=%04X)\n", (buf_size + 15) & ~0xf, regs.w.ax);
+        return 1;
+    }
+    table_segment = regs.w.ax;
+    table         = (irq_routing_table_t far *) MK_FP(regs.w.dx, 0);
+
+    /* Specify where the IRQ routing information will be placed. */
+    table->len              = buf_size;
+    table->data_ptr.segment = table_segment;
+    table->data_ptr.offset  = 2; /* hardcoded! */
+
+    /* Call PCI BIOS to fetch IRQ routing information. */
+    memset(&dpmi_regs, 0, sizeof(dpmi_regs));
+    dpmi_regs.eax = 0xb10e;
+    dpmi_regs.ebx = 0x0000;
+    dpmi_regs.es  = table_segment;
+    dpmi_regs.edi = 0x0000;
+    dpmi_regs.ds  = 0xf000;
+    segread(&seg_regs);
+    regs.w.ax    = 0x0300;
+    regs.w.bx    = 0x001a;
+    regs.w.cx    = 0x0000;
+    seg_regs.es  = FP_SEG(&dpmi_regs);
+    regs.x.edi   = FP_OFF(&dpmi_regs);
+    regs.w.cflag = 0;
+    int386x(0x31, &regs, &regs, &seg_regs);
+    if (regs.w.cflag) {
+        printf("DPMI call failed. (AX=%04X)\n", regs.w.ax);
         return 1;
     }
 
-    /* Specify where the IRQ routing information will be placed. */
-    table->len      = buf_size;
-    table->data_ptr = (void far *) table;
-
-    /* Call PCI BIOS to fetch IRQ routing information. */
-    rp.w.ax         = 0xb10e;
-    rp.w.bx         = 0x0000;
-    rp.w.es         = FP_SEG(table->data_ptr);
-    rp.w.di         = FP_OFF(table->data_ptr);
-    table->data_ptr = &table->entry[0];
-    rp.w.ds         = 0xf000;
-    intr(0x1a, &rp);
-
     /* Check for any returned error. */
-    if ((rp.h.ah == 0x59) && (table->len > buf_size)) {
+    i = (dpmi_regs.eax >> 8) & 0xff;
+    if ((i == 0x59) && (table->len > buf_size)) {
         /* Re-allocate buffer with the requested size. */
         buf_size = table->len;
         printf("PCI BIOS claims %d bytes for table entries, ", buf_size);
+        free_realmode(table_segment);
         if (buf_size >= 65530) {
             printf("which looks invalid.\n");
             return 1;
         }
         printf("retrying...\n");
         buf_size += 2;
-        free(table);
         goto retry_buf;
-    } else if (rp.h.ah) {
+    } else if (i) {
         /* Something else went wrong. */
-        printf("PCI BIOS call failed. (AH=%02X)\n", rp.h.ah);
+        printf("PCI BIOS call failed. (AH=%02X)\n", i);
+        free_realmode(table_segment);
         return 1;
     }
 
@@ -1039,6 +1079,7 @@ retry_buf:
         entries = table->len / sizeof(table->entry[0]);
         if (!entries) {
             printf("/* No entries found! */\n");
+            free_realmode(table_segment);
             return 1;
         }
 
@@ -1204,6 +1245,7 @@ next_entry:
         entry++;
     }
 
+    free_realmode(table_segment);
     return 0;
 }
 #endif
@@ -1342,7 +1384,7 @@ usage:
         printf("\n");
         printf("%s -s [-d]\n", argv[0]);
         printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
-#if defined(__WATCOMC__) && !defined(M_I386)
+#if defined(__WATCOMC__)
         printf("\n");
         printf("%s -t [-8]\n", argv[0]);
         printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
@@ -1392,7 +1434,7 @@ usage:
         else
             return scan_buses('\0');
     }
-#if defined(__WATCOMC__) && !defined(M_I386)
+#if defined(__WATCOMC__)
     else if (argv[1][1] == 't') {
         /* Steering table display only requires a single optional parameter. */
         if ((argc >= 3) && (strlen(argv[2]) > 1))

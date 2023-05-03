@@ -121,7 +121,7 @@ codec_probe(uint16_t (*codec_read)(uint8_t reg),
 
     /* Generate and print dump file name. */
     sprintf(buf, "COD%02X%02X%d.BIN", bus, dev, func);
-    printf("Saving codec register dump to %s\n", buf);
+    printf("Saving codec %c%c%c%02X register dump to %s\n", regs[0x7e >> 1] >> 8, regs[0x7e >> 1] & 0xff, regs[0x7f >> 1] >> 8, regs[0x7f >> 1] & 0xff, buf);
 
     /* Write dump file. */
     f = fopen(buf, "wb");

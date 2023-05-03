@@ -19,6 +19,14 @@
 #define CLIB_PCI_H
 #include "clib.h"
 
+#if defined(__GNUC__) && !defined(__POSIX_UEFI__)
+#include <pci/pci.h>
+static inline void libpci_init(struct pci_access *pacc) { pci_init(pacc); }
+static inline void libpci_scan_bus(struct pci_access *pacc) { pci_scan_bus(pacc); }
+#define pci_init pci_init_
+#define pci_scan_bus pci_scan_bus_
+#endif
+
 /* Global variables. */
 extern uint8_t pci_mechanism, pci_device_count;
 

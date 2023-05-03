@@ -24,6 +24,10 @@
 #include "clib_sys.h"
 
 uint8_t pci_mechanism = 0, pci_device_count = 0;
+#ifdef PCI_LIB_VERSION
+static struct pci_access *pacc;
+static struct pci_dev    *pdev;
+#endif
 
 /* Configuration functions. */
 uint32_t
@@ -110,9 +114,36 @@ pci_get_mem_bar(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t si
 }
 #endif
 
+#ifdef PCI_LIB_VERSION
+static void
+dummy_print(char *msg, ...)
+{
+}
+#endif
+
 int
 pci_init()
 {
+#ifdef PCI_LIB_VERSION
+    if (iopl(3)) {
+        perror("iopl");
+pci_init_fail:
+        pci_mechanism = 0;
+        return pci_mechanism;
+    }
+
+    pacc = pci_alloc();
+    if (!pacc) {
+        printf("Failed to allocate pci_access structure.\n");
+        goto pci_init_fail;
+    }
+
+    libpci_init(pacc);
+    pacc->error = pacc->warning = pacc->debug = dummy_print;
+
+    pci_mechanism    = 1;
+    pci_device_count = 32;
+#else
     multi_t cf8;
     cf8.u32 = 0x80001234;
 
@@ -134,6 +165,7 @@ pci_init()
     sti();
     if (pci_mechanism == 0)
         printf("Failed to probe PCI configuration mechanism (%04X%04X). Is this a PCI system?\n", cf8.u16[1], cf8.u16[0]);
+#endif
 
     return pci_mechanism;
 }
@@ -141,6 +173,10 @@ pci_init()
 uint8_t
 pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    return pdev ? pci_read_byte(pdev, reg) : 0xff;
+#else
     uint8_t  ret;
     uint16_t data_port;
     uint32_t cf8;
@@ -166,11 +202,16 @@ pci_readb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     }
 
     return ret;
+#endif
 }
 
 uint16_t
 pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    return pdev ? pci_read_word(pdev, reg) : 0xffff;
+#else
     uint16_t ret, data_port;
     uint32_t cf8;
 
@@ -195,11 +236,16 @@ pci_readw(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     }
 
     return ret;
+#endif
 }
 
 uint32_t
 pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    return pdev ? pci_read_long(pdev, reg) : 0xffffffff;
+#else
     uint16_t data_port;
     uint32_t ret, cf8;
 
@@ -228,11 +274,17 @@ pci_readl(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg)
     }
 
     return ret;
+#endif
 }
 
 void
 pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    if (pdev)
+        pci_write_byte(pdev, reg, val);
+#else
     uint8_t  shift;
     uint16_t data_port;
     uint32_t cf8;
@@ -255,11 +307,17 @@ pci_writeb(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint8_t val)
             pci_writel(bus, dev, func, reg, cf8);
             break;
     }
+#endif
 }
 
 void
 pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    if (pdev)
+        pci_write_word(pdev, reg, val);
+#else
     uint8_t  shift;
     uint16_t data_port;
     uint32_t cf8;
@@ -282,11 +340,17 @@ pci_writew(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint16_t val)
             pci_writel(bus, dev, func, reg, cf8);
             break;
     }
+#endif
 }
 
 void
 pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
 {
+#ifdef PCI_LIB_VERSION
+    pdev = pci_get_dev(pacc, 0, bus, dev, func);
+    if (pdev)
+        pci_write_long(pdev, reg, val);
+#else
     uint16_t data_port;
     uint32_t cf8;
 
@@ -309,6 +373,7 @@ pci_writel(uint8_t bus, uint8_t dev, uint8_t func, uint8_t reg, uint32_t val)
             sti();
             break;
     }
+#endif
 }
 
 void
@@ -316,6 +381,15 @@ pci_scan_bus(uint8_t bus,
              void (*callback)(uint8_t bus, uint8_t dev, uint8_t func,
                               uint16_t ven_id, uint16_t dev_id))
 {
+#ifdef PCI_LIB_VERSION
+    libpci_scan_bus(pacc);
+    for (pdev = pacc->devices; pdev; pdev = pdev->next) {
+        if (pdev->domain || (pdev->bus != bus))
+            continue;
+        pci_fill_info(pdev, PCI_FILL_IDENT);
+        callback(pdev->bus, pdev->dev, pdev->func, pdev->vendor_id, pdev->device_id);
+    }
+#else
     uint8_t dev, func, header_type;
     multi_t dev_id;
 
@@ -324,16 +398,16 @@ pci_scan_bus(uint8_t bus,
         /* Iterate through functions. */
         for (func = 0; func < 8; func++) {
             /* Read vendor/device ID. */
-#ifdef DEBUG
+#    ifdef DEBUG
             if ((bus < DEBUG) && (dev <= bus) && (func == 0)) {
                 dev_id.u16[0] = rand();
                 dev_id.u16[1] = rand();
             } else {
                 dev_id.u32 = 0xffffffff;
             }
-#else
+#    else
             dev_id.u32  = pci_readl(bus, dev, func, 0x00);
-#endif
+#    endif
 
             /* Callback if this is a valid ID. */
             if (dev_id.u32 && (dev_id.u32 != 0xffffffff)) {
@@ -347,20 +421,20 @@ pci_scan_bus(uint8_t bus,
             }
 
             /* Read header type. */
-#ifdef DEBUG
+#    ifdef DEBUG
             header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
-#else
+#    else
             header_type = pci_readb(bus, dev, func, 0x0e);
-#endif
+#    endif
 
             /* If this is a bridge, mark that we should probe its bus. */
             if (header_type & 0x7f) {
                 /* Scan the secondary bus. */
-#ifdef DEBUG
+#    ifdef DEBUG
                 pci_scan_bus(bus + 1, callback);
-#else
+#    else
                 pci_scan_bus(pci_readb(bus, dev, func, 0x19), callback);
-#endif
+#    endif
             }
 
             /* If we're at the first function, stop if this is not a multi-function device. */
@@ -368,4 +442,5 @@ pci_scan_bus(uint8_t bus,
                 break;
         }
     }
+#endif
 }

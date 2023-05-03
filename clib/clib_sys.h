@@ -51,7 +51,7 @@ void outl(uint16_t port, uint32_t data);
    due to Watcom ignoring the order registers are specified in... */
 uint32_t inl(uint16_t port);
 #        pragma aux inl = "db 0x66"                                     \
-                          "in ax, dx" /* in eax, dx */                  \
+                          "in ax, dx"                 /* in eax, dx */  \
                           "mov cx, ax"                                  \
                           "db 0x66, 0xc1, 0xe8, 0x10" /* shr eax, 16 */ \
                           "xchg ax, cx" parm[dx] value[ax cx];
@@ -64,6 +64,21 @@ void     outl(uint16_t port, uint32_t data);
             parm[dx][ax cx] modify[ax cx];
 #    endif
 #else
+#    if defined(__GNUC__) && !defined(__POSIX_UEFI__)
+#        define inb  sys_inb
+#        define outb sys_outb
+#        define inw  sys_inw
+#        define outw sys_outw
+#        define inl  sys_inl
+#        define outl sys_outl
+#        include <sys/io.h>
+#        undef inb
+#        undef outb
+#        undef inw
+#        undef outw
+#        undef inl
+#        undef outl
+#    endif
 extern uint8_t  inb(uint16_t port);
 extern void     outb(uint16_t port, uint8_t data);
 extern uint16_t inw(uint16_t port);

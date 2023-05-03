@@ -19,6 +19,10 @@
 #    include <uefi.h>
 #else
 #    include <stdio.h>
+#    ifdef __GNUC__
+#        include <sys/ioctl.h>
+#        include <unistd.h>
+#    endif
 #endif
 #ifdef __WATCOMC__
 #    include <dos.h>
@@ -64,6 +68,58 @@ term_set_cursor_pos(uint8_t x, uint8_t y)
     rp.h.dl = x;
     rp.h.dh = y;
     intr(0x10, &rp);
+    return 1;
+}
+#elif defined(TIOCGWINSZ)
+int
+term_get_size_x()
+{
+    struct winsize ws;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+    return ws.ws_col;
+}
+
+int
+term_get_size_y()
+{
+    struct winsize ws;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+    return ws.ws_row;
+}
+
+int
+term_get_cursor_pos(uint8_t *x, uint8_t *y)
+{
+    char ch;
+
+    fputs("\033[6n", stderr);
+    fflush(stderr);
+    if (getc(stdin) != 0x1b)
+        return 0;
+    if (getc(stdin) != '[')
+        return 0;
+    *x = *y = 0;
+    while (1) {
+        ch = getc(stdin);
+        if ((ch < '0') || (ch > '9'))
+            break;
+        *x = (*x * 10) + (ch - '0');
+    }
+    while (1) {
+        ch = getc(stdin);
+        if ((ch < '0') || (ch > '9'))
+            break;
+        *y = (*y * 10) + (ch - '0');
+    }
+    *x -= 1;
+    *y -= 1;
+    return 1;
+}
+
+int
+term_set_cursor_pos(uint8_t x, uint8_t y)
+{
+    fprintf(stderr, "\033[%d;%dH", x + 1, y + 1);
     return 1;
 }
 #else

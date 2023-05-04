@@ -952,22 +952,23 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
         if (reg_val.u8[0] & 1) {
             printf("I/O at %04X", reg_val.u16[0] & 0xfffc);
         } else {
-            printf("Memory at %04X%04X (", reg_val.u16[1], reg_val.u16[0] & 0xfff0);
-            switch (reg_val.u8[0] & 0x06) {
+            printf("Memory at ");
+            switch (reg_val.u32 & 0x00000006) {
                 case 0x00:
-                    printf("32-bit");
+                    printf("%08X (32-bit", reg_val.u32 & 0xfffffff0);
                     break;
 
                 case 0x02:
-                    printf("below 1 MB");
+                    printf("%05X (below 1 MB", reg_val.u32 & 0xfffffff0);
                     break;
 
                 case 0x04:
-                    printf("64-bit");
+                    /* Next BAR has the upper 32 bits. */
+                    printf("%08X_%08X (64-bit", pci_readl(bus, dev, func, 0x14 + (i++ << 2)), reg_val.u32 & 0xfffffff0);
                     break;
 
                 case 0x06:
-                    printf("invalid location");
+                    printf("%08X (invalid location", reg_val.u32 & 0xfffffff0);
                     break;
             }
             printf(", ");

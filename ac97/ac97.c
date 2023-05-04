@@ -74,8 +74,14 @@ codec_probe(uint16_t (*codec_read)(uint8_t reg),
         printf(" 3D");
     codec_write(0x22, 0xffff);
     if (!silent)
+        printf(" PD");
+    codec_write(0x26, 0xcf00); /* don't power down internal and external clks, this disables the codec */
+    if (!silent)
         printf(" EAID");
     codec_write(0x28, codec_read(0x28) | 0x0030);
+    if (!silent)
+        printf(" EACtl");
+    codec_write(0x2a, codec_read(0x2a) | 0xf800);
     if (!silent)
         printf(" C/LFE");
     codec_write(0x36, 0xbfbf);

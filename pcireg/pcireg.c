@@ -1008,9 +1008,9 @@ dump_steering_table(char mode)
     int                      i, j, entries;
     uint8_t                  irq_bitmap[256], temp[4];
     uint16_t                 buf_size = 1024, table_segment, dev_class;
-    irq_routing_table_t far *table;
-    irq_routing_entry_t far *entry;
-    uint32_t                 ttt;
+    irq_routing_table_t far *far_table;
+    irq_routing_table_t     *table;
+    irq_routing_entry_t     *entry;
 
     /* Allocate real mode memory buffer for PCI BIOS. */
 retry_buf:
@@ -1023,12 +1023,12 @@ retry_buf:
         return 1;
     }
     table_segment = regs.w.ax;
-    table         = (irq_routing_table_t far *) MK_FP(regs.w.dx, 0);
+    far_table     = (irq_routing_table_t far *) MK_FP(regs.w.dx, 0);
 
     /* Specify where the IRQ routing information will be placed. */
-    table->len              = buf_size;
-    table->data_ptr.segment = table_segment;
-    table->data_ptr.offset  = 2; /* hardcoded! */
+    far_table->len              = buf_size;
+    far_table->data_ptr.segment = table_segment;
+    far_table->data_ptr.offset  = 2; /* hardcoded! */
 
     /* Call PCI BIOS to fetch IRQ routing information. */
     memset(&dpmi_regs, 0, sizeof(dpmi_regs));
@@ -1052,9 +1052,9 @@ retry_buf:
 
     /* Check for any returned error. */
     i = (dpmi_regs.eax >> 8) & 0xff;
-    if ((i == 0x59) && (table->len > buf_size)) {
+    if ((i == 0x59) && (far_table->len > buf_size)) {
         /* Re-allocate buffer with the requested size. */
-        buf_size = table->len;
+        buf_size = far_table->len;
         printf("PCI BIOS claims %d bytes for table entries, ", buf_size);
         free_realmode(table_segment);
         if (buf_size >= 65530) {
@@ -1071,6 +1071,16 @@ retry_buf:
         return 1;
     }
 
+    /* Move data to a near buffer. */
+    table = malloc(buf_size);
+    if (!table) {
+        printf("Failed to allocate %d local bytes.\n", buf_size);
+        free_realmode(table_segment);
+        return 1;
+    }
+    _fmemcpy(table, far_table, buf_size);
+    free_realmode(table_segment);
+
     /* Get terminal size. */
     term_width = term_get_size_x();
 
@@ -1080,7 +1090,7 @@ retry_buf:
         entries = table->len / sizeof(table->entry[0]);
         if (!entries) {
             printf("/* No entries found! */\n");
-            free_realmode(table_segment);
+            free(table);
             return 1;
         }
 
@@ -1246,7 +1256,7 @@ next_entry:
         entry++;
     }
 
-    free_realmode(table_segment);
+    free(table);
     return 0;
 }
 #endif

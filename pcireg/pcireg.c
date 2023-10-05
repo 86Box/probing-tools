@@ -1025,90 +1025,122 @@ free_realmode(uint16_t segment)
     return !regs.w.cflag;
 }
 
+#define STEERING_TABLE_PIR   1
+#define STEERING_TABLE_86BOX 2
+
 static int
-dump_steering_table(char mode)
+dump_steering_table(uint8_t mode)
 {
     int                      i, j, entries;
     uint8_t                  irq_bitmap[256], temp[4];
-    uint16_t                 buf_size = 1024, table_segment, dev_class;
+    uint16_t                 buf_size, table_segment, dev_class;
     irq_routing_table_t far *far_table;
     irq_routing_table_t     *table;
     irq_routing_entry_t     *entry;
 
-    /* Allocate real mode memory buffer for PCI BIOS. */
-retry_buf:
-    memset(&regs, 0, sizeof(regs));
-    regs.w.ax = 0x0100;
-    regs.w.bx = (buf_size + 15) >> 4;
-    int386(0x31, &regs, &regs);
-    if (regs.w.cflag) {
-        printf("Failed to allocate %d bytes. (AX=%04X)\n", (buf_size + 15) & ~0xf, regs.w.ax);
-        return 1;
-    }
-    table_segment = regs.w.ax;
-    far_table     = (irq_routing_table_t far *) MK_FP(regs.w.dx, 0);
-
-    /* Specify where the IRQ routing information will be placed. */
-    far_table->len              = buf_size;
-    far_table->data_ptr.segment = table_segment;
-    far_table->data_ptr.offset  = 2; /* hardcoded! */
-
-    /* Call PCI BIOS to fetch IRQ routing information. */
-    memset(&dpmi_regs, 0, sizeof(dpmi_regs));
-    dpmi_regs.eax = 0xb10e;
-    dpmi_regs.ebx = 0x0000;
-    dpmi_regs.es  = table_segment;
-    dpmi_regs.edi = 0x0000;
-    dpmi_regs.ds  = 0xf000;
-    segread(&seg_regs);
-    regs.w.ax    = 0x0300;
-    regs.w.bx    = 0x001a;
-    regs.w.cx    = 0x0000;
-    seg_regs.es  = FP_SEG(&dpmi_regs);
-    regs.x.edi   = FP_OFF(&dpmi_regs);
-    regs.w.cflag = 0;
-    int386x(0x31, &regs, &regs, &seg_regs);
-    if (regs.w.cflag) {
-        printf("DPMI call failed. (AX=%04X)\n", regs.w.ax);
-        return 1;
-    }
-
-    /* Check for any returned error. */
-    i = (dpmi_regs.eax >> 8) & 0xff;
-    if ((i == 0x59) && (far_table->len > buf_size)) {
-        /* Re-allocate buffer with the requested size. */
-        buf_size = far_table->len;
-        printf("PCI BIOS claims %d bytes for table entries, ", buf_size);
-        free_realmode(table_segment);
-        if (buf_size >= 65530) {
-            printf("which looks invalid.\n");
+    if (mode & STEERING_TABLE_PIR) {
+        /* Search for PIR table. */
+        uint32_t *p = (uint32_t *) 0xf0000;
+        for (; (int) p <= 0xfffff; p += 4) { /* every 16 bytes */
+            if (*p == ('$' | ('P' << 8) | ('I' << 16) | ('R' << 24)))
+                break;
+        }
+        if ((int) p > 0xfffff) {
+            printf("$PIR table not found in BIOS space.\n");
+retry_pir:
+            printf("Try again without -m\n");
             return 1;
         }
-        printf("retrying...\n");
-        buf_size += 2;
-        goto retry_buf;
-    } else if (i) {
-        /* Something else went wrong. */
-        printf("PCI BIOS call failed. (AH=%02X)\n", i);
-        free_realmode(table_segment);
-        return 1;
-    }
 
-    /* Move data to a near buffer. */
-    table = malloc(buf_size);
-    if (!table) {
-        printf("Failed to allocate %d local bytes.\n", buf_size);
+        /* Move data to a near buffer while converting to the PCI BIOS format. */
+        i = (((uint16_t *) p)[3] - 32) >> 4; /* byte 6 */
+        buf_size = sizeof(irq_routing_table_t) + (sizeof(irq_routing_entry_t) * (i - 1)); /* subtract the single entry in the base struct */
+        table = malloc(buf_size);
+        if (!table) {
+            printf("Failed to allocate %d local bytes.\n", buf_size);
+            goto retry_pir;
+        }
+        table->len = i * sizeof(irq_routing_entry_t);
+        memcpy(&table->entry[0], &p[8], i * sizeof(irq_routing_entry_t)); /* byte 32 */
+    } else {
+        /* Allocate real mode memory buffer for PCI BIOS. */
+        buf_size = 1024;
+retry_buf:
+        memset(&regs, 0, sizeof(regs));
+        regs.w.ax = 0x0100;
+        regs.w.bx = (buf_size + 15) >> 4;
+        int386(0x31, &regs, &regs);
+        if (regs.w.cflag) {
+            printf("Failed to allocate %d bytes. (AX=%04X)\n", (buf_size + 15) & ~0xf, regs.w.ax);
+retry_pcibios:
+            printf("Try again with -m\n");
+            return 1;
+        }
+        table_segment = regs.w.ax;
+        far_table     = (irq_routing_table_t far *) MK_FP(regs.w.dx, 0);
+
+        /* Specify where the IRQ routing information will be placed. */
+        far_table->len              = buf_size;
+        far_table->data_ptr.segment = table_segment;
+        far_table->data_ptr.offset  = 2; /* hardcoded! */
+
+        /* Call PCI BIOS to fetch IRQ routing information. */
+        memset(&dpmi_regs, 0, sizeof(dpmi_regs));
+        dpmi_regs.eax = 0xb10e;
+        dpmi_regs.ebx = 0x0000;
+        dpmi_regs.es  = table_segment;
+        dpmi_regs.edi = 0x0000;
+        dpmi_regs.ds  = 0xf000;
+        segread(&seg_regs);
+        regs.w.ax    = 0x0300;
+        regs.w.bx    = 0x001a;
+        regs.w.cx    = 0x0000;
+        seg_regs.es  = FP_SEG(&dpmi_regs);
+        regs.x.edi   = FP_OFF(&dpmi_regs);
+        regs.w.cflag = 0;
+        int386x(0x31, &regs, &regs, &seg_regs);
+        if (regs.w.cflag) {
+            printf("DPMI call failed. (AX=%04X)\n", regs.w.ax);
+            goto retry_pcibios;
+        }
+
+        /* Check for any returned error. */
+        i = (dpmi_regs.eax >> 8) & 0xff;
+        if ((i == 0x59) && (far_table->len > buf_size)) {
+            /* Re-allocate buffer with the requested size. */
+            buf_size = far_table->len;
+            printf("PCI BIOS claims %d bytes for table entries, ", buf_size);
+            free_realmode(table_segment);
+            if (buf_size >= 65530) {
+                printf("which looks invalid.\n");
+                goto retry_pcibios;
+            }
+            printf("retrying...\n");
+            buf_size += 2;
+            goto retry_buf;
+        } else if (i) {
+            /* Something else went wrong. */
+            printf("PCI BIOS call failed. (AH=%02X)\n", i);
+            free_realmode(table_segment);
+            goto retry_pcibios;
+        }
+
+        /* Move data to a near buffer. */
+        table = malloc(buf_size);
+        if (!table) {
+            printf("Failed to allocate %d local bytes.\n", buf_size);
+            free_realmode(table_segment);
+            goto retry_pcibios;
+        }
+        _fmemcpy(table, far_table, buf_size);
         free_realmode(table_segment);
-        return 1;
     }
-    _fmemcpy(table, far_table, buf_size);
-    free_realmode(table_segment);
 
     /* Get terminal size. */
     term_width = term_get_size_x();
 
     /* Start output according to the selected mode. */
-    if (mode == '8') {
+    if (mode & STEERING_TABLE_86BOX) {
         /* Stop if no entries were found. */
         entries = table->len / sizeof(table->entry[0]);
         if (!entries) {
@@ -1202,7 +1234,7 @@ retry_buf:
         entry->dev >>= 3;
 
         /* Print entry according to the selected mode. */
-        if (mode == '8') {
+        if (mode & STEERING_TABLE_86BOX) {
             /* Ignore non-root buses. */
             if (entry->bus)
                 goto next_entry;
@@ -1424,14 +1456,13 @@ main(int argc, char **argv)
     /* Print usage if there are too few parameters or if the first one looks invalid. */
     if ((argc <= 1) || (strlen(argv[1]) < 2) || ((argv[1][0] != '-') && (argv[1][0] != '/'))) {
 usage:
-        printf("Usage:\n");
-        printf("\n");
         printf("%s -s [-d]\n", argv[0]);
         printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
 #if defined(__WATCOMC__)
         printf("\n");
-        printf("%s -t [-8]\n", argv[0]);
-        printf("∟ Display BIOS IRQ steering table. Specify -8 to display as 86Box code.\n");
+        printf("%s -t [-m] [-8]\n", argv[0]);
+        printf("∟ Display BIOS IRQ steering table. Specify -m to look for a Microsoft $PIR\n");
+        printf("  table instead of calling PCI BIOS. Specify -8 to display as 86Box code.\n");
 #endif
         printf("\n");
         printf("%s -i [bus] device [function]\n", argv[0]);
@@ -1472,7 +1503,7 @@ usage:
 
     /* Interpret parameters. */
     if (argv[1][1] == 's') {
-        /* Bus scan only require a single optional parameter. */
+        /* Bus scan only asks for a single optional parameter. */
         if ((argc >= 3) && (strlen(argv[2]) > 1))
             return scan_buses(argv[2][1]);
         else
@@ -1480,11 +1511,17 @@ usage:
     }
 #if defined(__WATCOMC__)
     else if (argv[1][1] == 't') {
-        /* Steering table display only requires a single optional parameter. */
-        if ((argc >= 3) && (strlen(argv[2]) > 1))
-            return dump_steering_table(argv[2][1]);
-        else
-            return dump_steering_table('\0');
+        /* Steering table display asks for optional parameters. */
+        reg = 0;
+        for (i = 2; i < argc; i++) {
+            if (argv[i][0] == '\0')
+                continue;
+            else if (argv[i][1] == '8')
+                reg |= STEERING_TABLE_86BOX;
+            else if (argv[i][1] == 'm')
+                reg |= STEERING_TABLE_PIR;
+        }
+        return dump_steering_table(reg);
     }
 #endif
     else if ((argc >= 3) && (strlen(argv[1]) > 1)) {

@@ -1099,26 +1099,28 @@ retry_buf:
         qsort(entry, entries, sizeof(table->entry[0]), comp_irq_routing_entry);
 
         /* Check for and add missing northbridge steering entries. */
-        while (entries > 0) {
-            /* Make sure we are on the first entry for the root bus. */
-            if (entry->bus == 0)
-                break;
-            entries--;
+        i = 0;
+        for (; entries > 0; entries--) {
+            /* Make sure we are on the root bus. */
+            if (entry->bus == 0) {
+                if ((entry->dev >> 3) == 0x00)
+                    i |= 1;
+                else if ((entry->dev >> 3) == 0x01)
+                    i |= 2;
+            }
             entry++;
         }
-        if (entries > 0) {
-            /* Assume device 00 is the northbridge if it has a host bridge class. */
-            if (entry->dev > 0x00) {
-                dev_class = pci_readw(0x00, 0x00, 0, 0x0a);
-                if (dev_class == 0x0600)
-                    printf("pci_register_slot(0x00, PCI_CARD_NORTHBRIDGE, 1, 2, 3, 4);\n");
-            }
-            /* Assume device 01 is the AGP bridge if it has a PCI bridge class. */
-            if (entry->dev > 0x01) {
-                dev_class = pci_readw(0x00, 0x01, 0, 0x0a);
-                if (dev_class == 0x0604)
-                    printf("pci_register_slot(0x01, PCI_CARD_AGPBRIDGE,   1, 2, 3, 4);\n");
-            }
+        /* Assume device 00 is the northbridge if it has a host bridge class. */
+        if (!(i & 1)) {
+            dev_class = pci_readw(0x00, 0x00, 0, 0x0a);
+            if (dev_class == 0x0600)
+                printf("pci_register_slot(0x00, PCI_CARD_NORTHBRIDGE, 1, 2, 3, 4);\n");
+        }
+        /* Assume device 01 is the AGP bridge if it has a PCI bridge class. */
+        if (!(i & 2)) {
+            dev_class = pci_readw(0x00, 0x01, 0, 0x0a);
+            if (dev_class == 0x0604)
+                printf("pci_register_slot(0x01, PCI_CARD_AGPBRIDGE,   1, 2, 3, 4);\n");
         }
 
         /* Identify INTx# link value mapping by gathering all known values. */
@@ -1201,12 +1203,20 @@ retry_buf:
                     /* Very likely to be an onboard device. */
                     if ((dev_class & 0xff00) == 0x0300)
                         printf("VIDEO,      ");
-                    else if ((dev_class == 0x0401) || (dev_class == 0x0403))
-                        printf("SOUND,      ");
-                    else if (dev_class == 0x0100)
-                        printf("SCSI,       ");
                     else if (dev_class == 0x0101)
                         printf("IDE,        ");
+                    else if (dev_class == 0x0100)
+                        printf("SCSI,       ");
+                    else if ((dev_class == 0x0401) || (dev_class == 0x0403))
+                        printf("SOUND,      ");
+                    else if (dev_class == 0x0703)
+                        printf("MODEM,      ");
+                    else if ((dev_class & 0xff00) == 0x0200)
+                        printf("NETWORK,    ");
+                    else if (dev_class == 0x0700)
+                        printf("UART,       ");
+                    else if (dev_class == 0x0c03)
+                        printf("USB,        ");
                     else
                         goto normal;
                 } else {

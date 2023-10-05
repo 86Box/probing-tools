@@ -993,6 +993,29 @@ comp_irq_routing_entry(const void *elem1, const void *elem2)
 }
 
 static int
+comp_irq_routing_link(const void *elem1, const void *elem2)
+{
+    uint8_t a = *((uint8_t *) elem1);
+    uint8_t b = *((uint8_t *) elem2);
+
+    /* IRQ link values are highly chipset-dependent. For VIA and ALi chipsets,
+       we can get away with rotating the values left by 1 to get an ascending
+       order. Naturally, there are exceptions, but this should cover most cases. */
+
+    /* Special case for ALi M1489 AMIBIOS 6, actual order unconfirmed. */
+    if (a == 0x89)
+        a = 0xc1; /* immediately after 0x41 */
+    if (b == 0x89)
+        b = 0xc1;
+
+    /* Perform rotation. */
+    a = (a << 1) | (a >> 7);
+    b = (b << 1) | (b >> 7);
+
+    return comp_ui8(&a, &b);
+}
+
+static int
 free_realmode(uint16_t segment)
 {
     memset(&regs, 0, sizeof(regs));
@@ -1140,7 +1163,7 @@ retry_buf:
         }
 
         /* Sort link value entries. */
-        qsort(irq_bitmap, sizeof(irq_bitmap), sizeof(irq_bitmap[0]), comp_ui8);
+        qsort(irq_bitmap, sizeof(irq_bitmap), sizeof(irq_bitmap[0]), comp_irq_routing_link);
 
         /* Jump to the first non-zero link value entry. */
         for (i = 0; (i < sizeof(irq_bitmap)) && (!irq_bitmap[i]); i++)

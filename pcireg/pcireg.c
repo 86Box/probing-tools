@@ -1215,7 +1215,7 @@ retry_buf:
                 printf("NORTHBRIDGE,");
             } else {
                 /* Read device class. */
-                dev_class = pci_readw(0x00, 0x00, 0, 0x0a);
+                dev_class = pci_readw(0x00, entry->dev, 0, 0x0a);
 
                 /* Determine slot type by location and class. */
                 if ((entry->dev == 1) && (dev_class == 0x0604)) {

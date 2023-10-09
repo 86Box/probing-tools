@@ -206,18 +206,13 @@ dump_resource_data(char *id)
         if (!memcmp(buf, "\x00\x00\x00\x00\x00\x00\x00\x00\x00", 9) || !memcmp(buf, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", 9)) {
             printf("\n> Invalid header (all %02X)", buf[0]);
             goto done;
-        } else {
-            printf("\n> DEBUG: header: %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-                   buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8]);
         }
 
         /* Now dump the resources. */
         j = 0;
         while (read_resource_data(&byte)) {
-            if ((byte == 0x00) || (byte == 0xff)) {
-                printf("\n> DEBUG: %02X resource", byte);
+            if ((byte == 0x00) || (byte == 0xff))
                 break;
-            }
 
             /* Determine the amount of bytes to skip depending on resource type. */
             if (byte & 0x80) { /* large resource */

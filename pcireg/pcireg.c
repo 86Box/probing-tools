@@ -1046,7 +1046,7 @@ dump_steering_table(uint8_t mode)
                 break;
         }
         if ((int) p > 0xfffff) {
-            printf("$PIR table not found in BIOS space.\n");
+            printf("$PIR table not found in BIOS segment.\n");
 retry_pir:
             printf("Try again without -m\n");
             return 1;
@@ -1061,7 +1061,7 @@ retry_pir:
             goto retry_pir;
         }
         table->len = i * sizeof(irq_routing_entry_t);
-        memcpy(&table->entry[0], &p[8], i * sizeof(irq_routing_entry_t)); /* byte 32 */
+        memcpy(&table->entry[0], &p[8], table->len); /* byte 32 */
     } else {
         /* Allocate real mode memory buffer for PCI BIOS. */
         buf_size = 1024;

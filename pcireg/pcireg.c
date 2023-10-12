@@ -934,9 +934,8 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     }
 
     /* Read and print BARs. */
+    putchar('\n');
     for (i = 0; i < num_bars; i++) {
-        if (i == 0)
-            putchar('\n');
 
         /* Read BAR. */
         reg_val.u32 = pci_readl(bus, dev, func, 0x10 + (i << 2));
@@ -977,6 +976,11 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
             printf("prefetchable)");
         }
     }
+
+    /* Read and print expansion ROM. */
+    reg_val.u32 = pci_readl(bus, dev, func, 0x30);
+    if (reg_val.u32 && (reg_val.u32 != 0xffffffff))
+        printf("\nExpansion ROM: %08X (%sabled)", reg_val.u32 & 0xfffffffe, (reg_val.u8[0] & 1) ? "en" : "dis");
 
     printf("\n");
 

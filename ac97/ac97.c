@@ -442,13 +442,14 @@ intel_codec_write(uint8_t reg, uint16_t val)
 }
 
 static void
-intel_probe(uint16_t dev_id)
+intel_probe(const char *name, uint16_t dev_id)
 {
     uint8_t rev;
+    uint32_t globcnt;
 
     /* Print controller information. */
     rev = pci_readb(bus, dev, func, 0x08);
-    printf("Found Intel %04X revision %02X at bus %02X device %02X function %d\n", dev_id, rev, bus, dev, func);
+    printf("Found %s %04X revision %02X at bus %02X device %02X function %d\n", name, dev_id, rev, bus, dev, func);
 
     /* Get Mixer I/O BAR. */
     io_base = pci_get_io_bar(bus, dev, func, 0x10, 256, "Mixer");
@@ -462,10 +463,12 @@ intel_probe(uint16_t dev_id)
 
     /* Set up AC-Link interface. */
     printf("Waking codec up... ");
-    outl(alt_io_base | 0x2c, inl(alt_io_base | 0x2c) & ~0x00000002);
+    globcnt = inl(alt_io_base | 0x2c) & ~0x00000008;
+    outl(alt_io_base | 0x2c, globcnt & ~0x00000002);
+    globcnt = inl(alt_io_base | 0x2c);
     for (i = 1; i; i++) /* unknown delay required */
         inb(0xeb);
-    outl(alt_io_base | 0x2c, inl(alt_io_base | 0x2c) | 0x00000002);
+    outl(alt_io_base | 0x2c, globcnt | 0x00000002);
     for (i = 1; i; i++) {
         if (inl(alt_io_base | 0x30) & 0x00000100)
             break;
@@ -510,7 +513,10 @@ pci_scan_callback(uint8_t this_bus, uint8_t this_dev, uint8_t this_func,
         via_probe(dev_id);
     } else if ((ven_id == 0x8086) && ((dev_id == 0x2415) || (dev_id == 0x2425) || (dev_id == 0x2445) || (dev_id == 0x2485) || (dev_id == 0x24c5) || (dev_id == 0x24d5) || (dev_id == 0x25a6) || (dev_id == 0x266e) || (dev_id == 0x27de) || (dev_id == 0x7195))) {
         print_spacer();
-        intel_probe(dev_id);
+        intel_probe("Intel", dev_id);
+    } else if ((ven_id == 0x10de) && ((dev_id == 0x01b1) || (dev_id == 0x003a) || (dev_id == 0x006a) || (dev_id == 0x0059) || (dev_id == 0x008a) || (dev_id == 0x00da) || (dev_id == 0x00ea) || (dev_id == 0x026b))) {
+        print_spacer();
+        intel_probe("nForce", dev_id);
     }
 }
 

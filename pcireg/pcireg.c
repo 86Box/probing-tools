@@ -80,6 +80,24 @@ static const char *devsel[] = {
     "Slow",
     "Invalid"
 };
+static const char *bridge_flags[] = {
+    "Parity",
+    "SErr",
+    "ISA",
+    "VGA",
+    NULL,
+    "MasterAbort",
+    "SecReset",
+    "FastB2B",
+    "PriMTimeout",
+    "SecMTimeout",
+    "TimeoutStat",
+    "TimeoutSErr",
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
 static int   term_width;
 static FILE *pciids_f = NULL;
@@ -764,8 +782,8 @@ static int
 dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 {
     char   *temp;
-    int     i;
-    uint8_t header_type, subsys_reg, num_bars;
+    int     i, j;
+    uint8_t header_type, subsys_reg, num_bars, exprom_reg;
     multi_t reg_val;
 
     /* Print banner message. */
@@ -816,21 +834,25 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
         case 0x00: /* standard */
             subsys_reg = 0x2c;
             num_bars   = 6;
+            exprom_reg = 0x30;
+            break;
+
+        case 0x01: /* PCI bridge */
+            subsys_reg = 0xff;
+            num_bars   = 2;
+            exprom_reg = 0x38;
             break;
 
         case 0x02: /* CardBus bridge */
             subsys_reg = 0x40;
             num_bars   = 0;
-            break;
-
-        case 0x03: /* PCI bridge and others */
-            subsys_reg = 0xff;
-            num_bars   = 2;
+            exprom_reg = 0xff;
             break;
 
         default: /* others */
             subsys_reg = 0xff;
             num_bars   = 0;
+            exprom_reg = 0xff;
             break;
     }
     if (subsys_reg != 0xff) {
@@ -872,6 +894,12 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     printf("\n Status:");
     info_flags_helper(reg_val.u16[1], status_flags);
     printf(" DEVSEL[%s]", devsel[(reg_val.u16[1] >> 9) & 3]);
+
+    /* Print bridge flags if this is a bridge. */
+    if ((header_type & 0x7f) == 0x01) {
+        printf("\n Bridge:");
+        info_flags_helper(pci_readw(bus, dev, func, 0x3e), bridge_flags);
+    }
 
     /* Read revision and class ID. */
     reg_val.u32 = pci_readl(bus, dev, func, 0x08);
@@ -934,9 +962,8 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     }
 
     /* Read and print BARs. */
-    putchar('\n');
+    j = 0;
     for (i = 0; i < num_bars; i++) {
-
         /* Read BAR. */
         reg_val.u32 = pci_readl(bus, dev, func, 0x10 + (i << 2));
 
@@ -945,6 +972,10 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
             continue;
 
         /* Print BAR index. */
+        if (!j) {
+            putchar('\n');
+            j = 1;
+        }
         printf("\nBAR %d: ", i);
 
         /* Print BAR type, address and properties. */
@@ -963,7 +994,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 
                 case 0x04:
                     /* Next BAR has the upper 32 bits. */
-                    printf("%08X_%08X (64-bit", pci_readl(bus, dev, func, 0x14 + (i++ << 2)), reg_val.u32 & 0xfffffff0);
+                    printf("%08X'%08X (64-bit", pci_readl(bus, dev, func, 0x14 + (i++ << 2)), reg_val.u32 & 0xfffffff0);
                     break;
 
                 case 0x06:
@@ -977,10 +1008,41 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
         }
     }
 
-    /* Read and print expansion ROM. */
-    reg_val.u32 = pci_readl(bus, dev, func, 0x30);
-    if (reg_val.u32 && (reg_val.u32 != 0xffffffff))
-        printf("\nExpansion ROM: %08X (%sabled)", reg_val.u32 & 0xfffffffe, (reg_val.u8[0] & 1) ? "en" : "dis");
+    if ((header_type & 0x7f) == 0x01) {
+        /* Read and print PCI bridge specific registers. */
+        putchar('\n');
+
+        /* Read and print bus numbers. */
+        reg_val.u32 = pci_readl(bus, dev, func, 0x18);
+        printf("\nPCI bus: Primary[%02X] Secondary[%02X] Subordinate[%02X]", reg_val.u8[0], reg_val.u8[1], reg_val.u8[2]);
+
+        /* Read and print I/O range. */
+        reg_val.u16[0] = pci_readw(bus, dev, func, 0x1c);
+        printf("\n    I/O: ");
+        if (reg_val.u8[0] & 1)
+            printf("%04X%04X-%04X%04X (32-bit)", pci_readw(bus, dev, func, 0x30), (reg_val.u8[0] & 0xf0) << 8, pci_readw(bus, dev, func, 0x32), reg_val.u16[0] | 0x0fff);
+        else
+            printf("%04X-%04X (16-bit)", (reg_val.u8[0] & 0xf0) << 8, reg_val.u16[0] | 0x0fff);
+
+        /* Read and print MMIO memory range. */
+        reg_val.u32 = pci_readl(bus, dev, func, 0x20);
+        printf("\n Memory: %08X-%08X (32-bit, not prefetchable)\n         ", (reg_val.u32 & 0x0000fff0) << 16, reg_val.u32 | 0x000fffff);
+
+        /* Read and print prefetchable memory range. */
+        reg_val.u32 = pci_readl(bus, dev, func, 0x24);
+        if (reg_val.u16[0] & 1)
+            printf("%08X'%08X-%08X'%08X (64-bit", pci_readl(bus, dev, func, 0x28), (reg_val.u32 & 0x0000fff0) << 16, pci_readl(bus, dev, func, 0x2c), reg_val.u32 | 0x000fffff);
+        else
+            printf("%08X-%08X (32-bit", (reg_val.u32 & 0x0000fff0) << 16, reg_val.u32 | 0x000fffff);
+        printf(", prefetchable)");
+    }
+
+    if (exprom_reg != 0xff) {
+        /* Read and print expansion ROM. */
+        reg_val.u32 = pci_readl(bus, dev, func, exprom_reg);
+        if (reg_val.u32 && (reg_val.u32 != 0xffffffff))
+            printf("\nExpansion ROM: %08X (%sabled)", reg_val.u32 & 0xfffffffe, (reg_val.u8[0] & 1) ? "en" : "dis");
+    }
 
     printf("\n");
 

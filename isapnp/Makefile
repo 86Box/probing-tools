@@ -17,7 +17,6 @@
 
 SYSTEM	= DOS
 OBJS	= isapnp.obj clib_sys.obj clib_term.obj
-LIBS	= graph.lib
 DEST	= ISAPNP.EXE
 
 !include ../clib/watcom.mk

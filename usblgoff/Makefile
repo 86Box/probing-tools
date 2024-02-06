@@ -17,7 +17,6 @@
 
 SYSTEM	= PMODEW
 OBJS	= usblgoff.obj clib_pci.obj clib_sys.obj clib_term.obj
-LIBS	= graph.lib
 DEST	= USBLGOFF.EXE
 
 !include ../clib/watcom.mk

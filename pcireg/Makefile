@@ -17,7 +17,6 @@
 
 SYSTEM	= PMODEW
 OBJS	= pcireg.obj clib_pci.obj clib_std.obj clib_sys.obj clib_term.obj
-LIBS	= graph.lib
 DEST	= PCIREG.EXE
 
 !include ../clib/watcom.mk

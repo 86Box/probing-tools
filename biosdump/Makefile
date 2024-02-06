@@ -17,6 +17,7 @@
 
 SYSTEM	= PMODEW
 OBJS	= biosdump.obj clib_term.obj
+LIBS	= graph.lib
 DEST	= BIOSDUMP.EXE
 
 !include ../clib/watcom.mk

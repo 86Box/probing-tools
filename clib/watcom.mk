@@ -87,6 +87,9 @@ $(DEST):	$(OBJS)
 !if "$(SYSTEM)" != "HOST"
 		%write $@.lnk SYSTEM $(SYSTEM)
 !endif
+!ifdef LIBS
+		%write $@.lnk LIBRARY $(LIBS)
+!endif
 		%write $@.lnk FILE   {$(OBJS)}
 		$(LINK) $(LDFLAGS) @$@.lnk
 		$(DEL) $@.lnk

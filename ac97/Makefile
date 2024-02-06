@@ -17,6 +17,7 @@
 
 SYSTEM	= DOS
 OBJS	= ac97.obj clib_pci.obj clib_sys.obj clib_term.obj
+LIBS	= graph.lib
 DEST	= AC97.EXE
 
 !include ../clib/watcom.mk

@@ -28,7 +28,7 @@
 #    include <stdint.h>
 #    include <string.h>
 #    include <stdlib.h>
-#    ifdef __WATCOMC__
+#    ifdef MSDOS
 #        include <dos.h>
 #        include <i86.h>
 #    endif
@@ -101,7 +101,7 @@ static const char *bridge_flags[] = {
 
 static int   term_width;
 static FILE *pciids_f = NULL;
-#if defined(__WATCOMC__)
+#if defined(MSDOS)
 static union REGS   regs;
 static struct SREGS seg_regs;
 #    pragma pack(push, 1)
@@ -152,7 +152,7 @@ static struct PACKED {
     uint32_t string_offset;
 } pciids_progif;
 
-#if defined(__WATCOMC__)
+#if defined(MSDOS)
 typedef struct {
     uint8_t bus, dev;
     struct {
@@ -1049,7 +1049,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     return 0;
 }
 
-#if defined(__WATCOMC__)
+#if defined(MSDOS)
 static int
 comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
@@ -1524,7 +1524,7 @@ main(int argc, char **argv)
 usage:
         printf("%s -s [-d]\n", argv[0]);
         printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
-#if defined(__WATCOMC__)
+#if defined(MSDOS)
         printf("\n");
         printf("%s -t [-m] [-8]\n", argv[0]);
         printf("∟ Display BIOS IRQ steering table. Specify -m to look for a Microsoft $PIR\n");
@@ -1575,7 +1575,7 @@ usage:
         else
             return scan_buses('\0');
     }
-#if defined(__WATCOMC__)
+#if defined(MSDOS)
     else if (argv[1][1] == 't') {
         /* Steering table display asks for optional parameters. */
         reg = 0;

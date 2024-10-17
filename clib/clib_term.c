@@ -25,14 +25,14 @@
 #        include <unistd.h>
 #    endif
 #endif
-#ifdef __WATCOMC__
+#ifdef MSDOS
 #    include <dos.h>
 #    include <graph.h>
 #endif
 #include "clib_term.h"
 
 /* Positioning functions. */
-#ifdef __WATCOMC__
+#ifdef MSDOS
 static union REGPACK rp; /* things break if this is not a global variable... */
 
 int
@@ -154,7 +154,7 @@ term_set_cursor_pos(uint8_t x, uint8_t y)
 #endif
 
 /* Output functions. */
-#ifdef __WATCOMC__
+#ifdef MSDOS
 void
 term_unbuffer_stdout()
 {

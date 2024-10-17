@@ -1521,26 +1521,32 @@ main(int argc, char **argv)
 
     /* Print usage if there are too few parameters or if the first one looks invalid. */
     if ((argc <= 1) || (strlen(argv[1]) < 2) || ((argv[1][0] != '-') && (argv[1][0] != '/'))) {
+        ch = strrchr(argv[0], '\\');
+        if (!(ch++)) {
+            ch = strrchr(argv[0], '/');
+            if (!(ch++))
+                ch = argv[0];
+        }
 usage:
-        printf("%s -s [-d]\n", argv[0]);
+        printf("%s -s [-d]\n", ch);
         printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
 #if defined(MSDOS)
         printf("\n");
-        printf("%s -t [-m] [-8]\n", argv[0]);
+        printf("%s -t [-m] [-8]\n", ch);
         printf("∟ Display BIOS IRQ steering table. Specify -m to look for a Microsoft $PIR\n");
         printf("  table instead of calling PCI BIOS. Specify -8 to display as 86Box code.\n");
 #endif
         printf("\n");
-        printf("%s -i [bus] device [function]\n", argv[0]);
+        printf("%s -i [bus] device [function]\n", ch);
         printf("∟ Show information about the specified device.\n");
         printf("\n");
-        printf("%s -r [bus] device [function] register\n", argv[0]);
+        printf("%s -r [bus] device [function] register\n", ch);
         printf("∟ Read the specified register.\n");
         printf("\n");
-        printf("%s -w [bus] device [function] register value\n", argv[0]);
+        printf("%s -w [bus] device [function] register value\n", ch);
         printf("∟ Write byte, word or dword to the specified register.\n");
         printf("\n");
-        printf("%s {-d|-dw|-dl} [bus] device [function [register]]\n", argv[0]);
+        printf("%s {-d|-dw|-dl} [bus] device [function [register]]\n", ch);
         printf("∟ Dump registers as bytes (-d), words (-dw) or dwords (-dl). Optionally\n");
         printf("  specify the register to start from (requires bus to be specified as well).\n");
         printf("\n");

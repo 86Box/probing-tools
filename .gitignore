@@ -5,6 +5,7 @@
 # Watcom C
 *.err
 *.obj
+*.lnk
 
 # Python
 __pycache__

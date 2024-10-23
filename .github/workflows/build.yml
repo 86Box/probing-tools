@@ -31,7 +31,7 @@ jobs:
           cd /opt/pciutils-*
           make CC=i686-linux-gnu-gcc ZLIB=no DNS=no SHARED=no
           sudo make install-lib
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Build `cp437`
         run: |
           cd ${{ github.workspace }}/cp437
@@ -89,7 +89,7 @@ jobs:
           Invoke-WebRequest http://www.fysnet.net/zips/nbasm.zip -OutFile nbasm.zip
           Expand-Archive nbasm.zip -DestinationPath "$env:LOCALAPPDATA/Programs"
           echo "$env:LOCALAPPDATA/Programs" >> $env:GITHUB_PATH
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Build `amikey`
         run: |
           cd ${{ github.workspace }}/amikey
@@ -103,7 +103,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}/viakey
           ./build.bat VIAKEY
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: probing-tools-${{ github.sha }}
           path: |

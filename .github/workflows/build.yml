@@ -76,6 +76,7 @@ jobs:
           name: probing-tools-${{ github.sha }}
           path: |
             **/*.EXE
+            **/*.exe
             **/*.EFI
             pcireg/pcireg
             **/*.BIN

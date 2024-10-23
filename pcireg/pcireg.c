@@ -33,6 +33,7 @@
 #        include <i86.h>
 #    endif
 #endif
+#include "lh5_extract.h"
 #include "clib_pci.h"
 #include "clib_std.h"
 #include "clib_sys.h"
@@ -100,7 +101,6 @@ static const char *bridge_flags[] = {
 };
 
 static int   term_width;
-static FILE *pciids_f = NULL;
 #if defined(MSDOS)
 static union REGS   regs;
 static struct SREGS seg_regs;
@@ -112,45 +112,40 @@ static struct PACKED {
 #    pragma pack(pop)
 #endif
 
+static int pciids_cur_vendor;
+static int pciids_cur_device;
 #pragma pack(push, 1)
 static struct PACKED {
-    uint32_t device_db_offset,
-        subdevice_db_offset,
-        class_db_offset,
-        subclass_db_offset,
-        progif_db_offset,
-        string_db_offset;
-} pciids_header;
-static struct PACKED {
     uint16_t vendor_id;
-    uint32_t devices_offset,
-        string_offset;
-} pciids_vendor;
+    uint32_t devices_offset;
+    uint32_t string_offset;
+} *pciids_vendor = NULL;
 static struct PACKED {
     uint16_t device_id;
-    uint32_t subdevices_offset,
-        string_offset;
-} pciids_device;
-static struct PACKED {
-    uint16_t subvendor_id,
-        subdevice_id;
+    uint32_t subdevices_offset;
     uint32_t string_offset;
-} pciids_subdevice;
+} *pciids_device = NULL;
+static struct PACKED {
+    uint16_t subvendor_id;
+    uint16_t subdevice_id;
+    uint32_t string_offset;
+} *pciids_subdevice = NULL;
 static struct PACKED {
     uint8_t  class_id;
     uint32_t string_offset;
-} pciids_class;
+} *pciids_class = NULL;
 static struct PACKED {
-    uint8_t class_id,
-        subclass_id;
+    uint8_t  class_id;
+    uint8_t  subclass_id;
     uint32_t string_offset;
-} pciids_subclass;
+} *pciids_subclass = NULL;
 static struct PACKED {
-    uint8_t class_id,
-        subclass_id,
-        progif_id;
+    uint8_t  class_id;
+    uint8_t  subclass_id;
+    uint8_t  progif_id;
     uint32_t string_offset;
-} pciids_progif;
+} *pciids_progif = NULL;
+static char *pciids_string = NULL;
 
 #if defined(MSDOS)
 typedef struct {
@@ -174,84 +169,118 @@ typedef struct {
 #pragma pack(pop)
 
 static int
-pciids_open_database()
+pciids_open_database(void **ptr, char id)
 {
-    /* No action is required if the file is already open. */
-    if (pciids_f)
+    FILE          *f;
+    size_t         pos;
+    unsigned int   header_size;
+    unsigned int   original_size;
+    unsigned int   packed_size;
+    uint8_t        header[128];
+    char          *filename;
+    char           target_filename[13];
+    unsigned short crc;
+    uint8_t       *buf;
+
+    /* No action is required if the database is already loaded. */
+    if (*ptr)
         return 0;
 
-    /* Open file, and stop if the open failed or the header couldn't be read. */
-    pciids_f = fopen("PCIIDS.BIN", "r" FOPEN_BINARY);
-    if (pciids_f && (fread(&pciids_header, sizeof(pciids_header), 1, pciids_f) < 1)) {
-        fclose(pciids_f);
-        pciids_f = NULL;
+    /* Open archive, and stop if the open failed. */
+    f = fopen("PCIIDS.LHA", "r" FOPEN_BINARY);
+    if (!f) {
+        f = NULL;
+        return 1;
     }
 
-    /* Return 0 if the file was opened successfully, 1 otherwise. */
-    return !pciids_f;
+    /* Generate target filename. */
+    strcpy(target_filename, "PCIIDS_@.BIN");
+    target_filename[7] = id;
+
+    /* Go through archive. */
+    while (!feof(f)) {
+        /* Read LHA header. */
+        pos = ftell(f);
+        if (!fread(header, sizeof(header), 1, f))
+            break;
+
+        /* Parse LHA header. */
+        header_size = LH5HeaderParse(header, sizeof(header), &original_size, &packed_size, &filename, &crc);
+        if (!header_size)
+            break; /* invalid header */
+
+        /* Check filename. */
+        crc = !strcmp(filename, target_filename);
+        free(filename);
+        if (crc) {
+            /* Allocate buffer for reading the compressed data. */
+            buf = malloc(packed_size);
+            if (!buf)
+                goto fail;
+
+            /* Allocate buffer for the decompressed data. */
+            *ptr = malloc(original_size);
+            if (!*ptr)
+                goto fail;
+
+            /* Read and decompress data. */
+            fseek(f, pos + header_size, SEEK_SET);
+            if (!fread(buf, packed_size, 1, f))
+                goto fail;
+            if (LH5Decode(buf, packed_size, *ptr, original_size) == -1)
+                goto fail;
+
+            /* All done, close archive. */
+            fclose(f);
+            return 0;
+        }
+
+        /* Move on to the next header. */
+        fseek(f, pos + header_size + packed_size, SEEK_SET);
+    }
+
+fail:
+    /* Entry not found or read/decompression failed. */
+    printf("PCI ID database %c decompression failed\n", id);
+    fclose(f);
+    return 1;
 }
 
 static char *
 pciids_read_string(uint32_t offset)
 {
-    uint8_t  length, *buf;
-    uint32_t sum;
-    int      i;
-
     /* Return nothing if the string offset is invalid. */
     if (offset == 0xffffffff)
         return NULL;
 
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_string, 'T'))
         return NULL;
 
-    /* Seek to string offset. */
-    fseek(pciids_f, pciids_header.string_db_offset + offset, SEEK_SET);
-
-    /* Read string length, and return nothing if it's an empty string. */
-    fread(&length, sizeof(length), 1, pciids_f);
-    if (length == 0)
-        return NULL;
-
-    /* Read string into buffer. */
-    buf = malloc(length + 1);
-    if (fread(buf, length, 1, pciids_f) < 1) {
-        /* Clean up and return nothing if the read failed. */
-        free(buf);
-        return NULL;
-    }
-    buf[length] = '\0';
-
-    return buf;
+    return &pciids_string[offset];
 }
 
 static int
-pciids_find_vendor(uint16_t vendor_id)
+find_vendor(uint16_t vendor_id)
 {
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_vendor, 'V'))
         return 0;
 
-    /* Seek to vendor database. */
-    fseek(pciids_f, sizeof(pciids_header), SEEK_SET);
-
-    /* Read vendor entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_vendor, sizeof(pciids_vendor), 1, pciids_f) < 1)
-            break;
-    } while (pciids_vendor.vendor_id < vendor_id);
+    /* Go through vendor entries until the ID is matched or overtaken. */
+    for (pciids_cur_vendor = 0; pciids_vendor[pciids_cur_vendor].vendor_id < vendor_id; pciids_cur_vendor++)
+        ;
 
     /* Return 1 if the ID was matched, 0 otherwise. */
-    return pciids_vendor.vendor_id == vendor_id;
+    return pciids_vendor[pciids_cur_vendor].vendor_id == vendor_id;
 }
 
 static char *
 pciids_get_vendor(uint16_t vendor_id)
 {
     /* Find vendor ID in the database, and return its name if found. */
-    if (pciids_find_vendor(vendor_id))
-        return pciids_read_string(pciids_vendor.string_offset);
+    if (find_vendor(vendor_id))
+        return pciids_read_string(pciids_vendor[pciids_cur_vendor].string_offset);
 
     /* Return nothing if the vendor ID was not found. */
     return NULL;
@@ -263,21 +292,16 @@ pciids_get_device(uint16_t device_id)
     /* Must be preceded by a call to {find|get}_vendor to establish the vendor ID! */
 
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_device, 'D'))
         return NULL;
 
-    /* Seek to device database entries for the established vendor. */
-    fseek(pciids_f, pciids_header.device_db_offset + pciids_vendor.devices_offset, SEEK_SET);
-
-    /* Read device entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_device, sizeof(pciids_device), 1, pciids_f) < 1)
-            break;
-    } while (pciids_device.device_id < device_id);
+    /* Go through device entries until the ID is matched or overtaken. */
+    for (pciids_cur_device = pciids_vendor[pciids_cur_vendor].devices_offset; pciids_device[pciids_cur_device].device_id < device_id; pciids_cur_device++)
+        ;
 
     /* Return the device name if found. */
-    if (pciids_device.device_id == device_id)
-        return pciids_read_string(pciids_device.string_offset);
+    if (pciids_device[pciids_cur_device].device_id == device_id)
+        return pciids_read_string(pciids_device[pciids_cur_device].string_offset);
 
     /* Return nothing if the device ID was not found. */
     return NULL;
@@ -287,23 +311,19 @@ static char *
 pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
 {
     /* Must be preceded by calls to {find|get}_vendor and get_device to establish the vendor/device ID! */
+    int i;
 
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_subdevice, 'S'))
         return NULL;
 
-    /* Seek to subdevice database entries for the established subvendor. */
-    fseek(pciids_f, pciids_header.subdevice_db_offset + pciids_device.subdevices_offset, SEEK_SET);
-
-    /* Read subdevice entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_subdevice, sizeof(pciids_subdevice), 1, pciids_f) < 1)
-            break;
-    } while ((pciids_subdevice.subvendor_id < subvendor_id) || (pciids_subdevice.subdevice_id < subdevice_id));
+    /* Go through subdevice entries until the ID is matched or overtaken. */
+    for (i = pciids_device[pciids_cur_device].subdevices_offset; (pciids_subdevice[i].subvendor_id < subvendor_id) || (pciids_subdevice[i].subdevice_id < subdevice_id); i++)
+        ;
 
     /* Return the subdevice name if found. */
-    if ((pciids_subdevice.subvendor_id == subvendor_id) && (pciids_subdevice.subdevice_id == subdevice_id))
-        return pciids_read_string(pciids_subdevice.string_offset);
+    if ((pciids_subdevice[i].subvendor_id == subvendor_id) && (pciids_subdevice[i].subdevice_id == subdevice_id))
+        return pciids_read_string(pciids_subdevice[i].string_offset);
 
     /* Return nothing if the subdevice ID was not found. */
     return NULL;
@@ -312,22 +332,19 @@ pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
 static char *
 pciids_get_class(uint8_t class_id)
 {
+    int i;
+
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_class, 'C'))
         return NULL;
 
-    /* Seek to class database. */
-    fseek(pciids_f, pciids_header.class_db_offset, SEEK_SET);
-
-    /* Read class entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_class, sizeof(pciids_class), 1, pciids_f) < 1)
-            break;
-    } while (pciids_class.class_id < class_id);
+    /* Go through class entries until the ID is matched or overtaken. */
+    for (i = 0; pciids_class[i].class_id < class_id; i++)
+        ;
 
     /* Return the class name if found. */
-    if (pciids_class.class_id == class_id)
-        return pciids_read_string(pciids_class.string_offset);
+    if (pciids_class[i].class_id == class_id)
+        return pciids_read_string(pciids_class[i].string_offset);
 
     /* Return nothing if the class ID was not found. */
     return NULL;
@@ -336,22 +353,19 @@ pciids_get_class(uint8_t class_id)
 static char *
 pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
 {
+    int i;
+
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_subclass, 'U'))
         return NULL;
 
-    /* Seek to subclass database. */
-    fseek(pciids_f, pciids_header.subclass_db_offset, SEEK_SET);
-
-    /* Read subclass entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_subclass, sizeof(pciids_subclass), 1, pciids_f) < 1)
-            break;
-    } while ((pciids_subclass.class_id < class_id) || (pciids_subclass.subclass_id < subclass_id));
+    /* Go through subclass entries until the ID is matched or overtaken. */
+    for (i = 0; (pciids_subclass[i].class_id < class_id) || (pciids_subclass[i].subclass_id < subclass_id); i++)
+        ;
 
     /* Return the subclass name if found. */
-    if ((pciids_subclass.class_id == class_id) && (pciids_subclass.subclass_id == subclass_id))
-        return pciids_read_string(pciids_subclass.string_offset);
+    if ((pciids_subclass[i].class_id == class_id) && (pciids_subclass[i].subclass_id == subclass_id))
+        return pciids_read_string(pciids_subclass[i].string_offset);
 
     /* Return nothing if the subclass ID was not found. */
     return NULL;
@@ -360,22 +374,19 @@ pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
 static char *
 pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
 {
+    int i;
+
     /* Open database if required. */
-    if (pciids_open_database())
+    if (pciids_open_database((void **) &pciids_progif, 'P'))
         return NULL;
 
-    /* Seek to programming interface database. */
-    fseek(pciids_f, pciids_header.progif_db_offset, SEEK_SET);
-
-    /* Read programming interface entries until the ID is matched or overtaken. */
-    do {
-        if (fread(&pciids_progif, sizeof(pciids_progif), 1, pciids_f) < 1)
-            break;
-    } while ((pciids_progif.class_id < class_id) || (pciids_progif.subclass_id < subclass_id) || (pciids_progif.progif_id < progif_id));
+    /* Go through programming interface entries until the ID is matched or overtaken. */
+    for (i = 0; (pciids_progif[i].class_id < class_id) || (pciids_progif[i].subclass_id < subclass_id) || (pciids_progif[i].progif_id < progif_id); i++)
+        ;
 
     /* Return the programming interface name if found. */
-    if ((pciids_progif.class_id == class_id) && (pciids_progif.subclass_id == subclass_id) && (pciids_progif.progif_id == progif_id))
-        return pciids_read_string(pciids_progif.string_offset);
+    if ((pciids_progif[i].class_id == class_id) && (pciids_progif[i].subclass_id == subclass_id) && (pciids_progif[i].progif_id == progif_id))
+        return pciids_read_string(pciids_progif[i].string_offset);
 
     /* Return nothing if the programming interface ID was not found. */
     return NULL;
@@ -612,14 +623,12 @@ scan_bus(uint8_t bus, int nesting, char dump, char *buf)
                     /* Add vendor name to buffer. */
                     strcat(buf, temp);
                     strcat(buf, " ");
-                    free(temp);
 
                     /* Look up device name. */
                     temp = pciids_get_device(dev_id.u16[1]);
                     if (temp) {
                         /* Add device name to buffer. */
                         strcat(buf, temp);
-                        free(temp);
                     } else {
                         /* Device name not found. */
                         goto unknown_device;
@@ -633,7 +642,6 @@ unknown_device: /* Look up class ID. */
                     if (temp) {
                         /* Add class name to buffer. */
                         sprintf(&buf[strlen(buf)], "[%s]", temp);
-                        free(temp);
                     } else {
                         /* Class name not found. */
                         sprintf(&buf[strlen(buf)], "[Class %02X:%02X:%02X]", dev_rev_class.u8[3], dev_rev_class.u8[2], dev_rev_class.u8[1]);
@@ -807,24 +815,15 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 
     /* Print vendor name if found. */
     temp = pciids_get_vendor(reg_val.u16[0]);
-    if (temp) {
-        printf("%s", temp);
-        free(temp);
-    } else {
-        printf("[Unknown]");
-    }
+    printf("%s", temp ? temp : "[Unknown]");
 
     /* Print device ID. */
     printf("\nDevice: [%04X] ", reg_val.u16[1]);
 
     /* Print device name if found. */
     temp = pciids_get_device(reg_val.u16[1]);
-    if (temp) {
-        printf("%s", temp);
-        free(temp);
-    } else {
-        printf("[Unknown]");
-    }
+    if (temp)
+        printf("%s", temp ? temp : "[Unknown]");
 
     /* Read header type. We'll be using it a lot. */
     header_type = pci_readb(bus, dev, func, 0x0e);
@@ -864,24 +863,14 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 
             /* Print subvendor name if found. */
             temp = pciids_get_vendor(reg_val.u16[0]);
-            if (temp) {
-                printf("%s", temp);
-                free(temp);
-            } else {
-                printf("[Unknown]");
-            }
+            printf("%s", temp ? temp : "[Unknown]");
 
             /* Print subdevice ID. */
             printf("\nSubdevice: [%04X] ", reg_val.u16[1]);
 
             /* Print subdevice ID if found. */
             temp = pciids_get_subdevice(reg_val.u16[0], reg_val.u16[1]);
-            if (temp) {
-                printf("%s", temp);
-                free(temp);
-            } else {
-                printf("[Unknown]");
-            }
+            printf("%s", temp ? temp : "[Unknown]");
         }
     }
 
@@ -912,36 +901,21 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 
     /* Print class name if found. */
     temp = pciids_get_class(reg_val.u8[3]);
-    if (temp) {
-        printf("%s", temp);
-        free(temp);
-    } else {
-        printf("[Unknown]");
-    }
+    printf("%s", temp ? temp : "[Unknown]");
 
     /* Print subclass ID. */
     printf("\n       [%02X] ", reg_val.u8[2]);
 
     /* Print subclass name if found. */
     temp = pciids_get_subclass(reg_val.u8[3], reg_val.u8[2]);
-    if (temp) {
-        printf("%s", temp);
-        free(temp);
-    } else {
-        printf("[Unknown]");
-    }
+    printf("%s", temp ? temp : "[Unknown]");
 
     /* Print programming interface ID. */
     printf("\n       [%02X] ", reg_val.u8[1]);
 
     /* Print programming interface name if found. */
     temp = pciids_get_progif(reg_val.u8[3], reg_val.u8[2], reg_val.u8[1]);
-    if (temp) {
-        printf("%s", temp);
-        free(temp);
-    } else {
-        printf("[Unknown]");
-    }
+    printf("%s", temp ? temp : "[Unknown]");
 
     /* Read latency, grant and interrupt line. */
     reg_val.u32 = pci_readl(bus, dev, func, 0x3c);

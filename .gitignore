@@ -27,4 +27,4 @@ pci?????.bin
 *.efi
 pcireg/pcireg
 ac97/ac97
-PCIIDS.BIN
+PCIIDS_*.BIN

@@ -71,5 +71,5 @@ Building
 
 ### PCI ID database
 
-* Run `python3 pciids.py` to update the `PCIIDS.BIN` file.
+* Run `python3 pciids.py` to update the PCI ID files, then `lha a1o5 PCIIDS.LHA PCIIDS_*.BIN` to compress them in the expected format.
   * The latest version of `pci.ids` is automatically downloaded and used to update the database.

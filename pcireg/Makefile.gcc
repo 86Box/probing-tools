@@ -15,7 +15,7 @@
 #		Copyright 2023 RichardG.
 # 
 
-export OBJS	= pcireg.o clib_pci.o clib_std.o clib_sys.o clib_term.o
+export OBJS	= pcireg.o lh5_extract.o clib_pci.o clib_std.o clib_sys.o clib_term.o
 export DEST	= pcireg
 override LDFLAGS	+= -lpci $(LDAPPEND)
 

@@ -43,7 +43,7 @@ clean_device_abbr = [
 	('High Definition Audio', 'HDA'),
 	('Host Adapter', 'HBA'),
 	('Host Bus Adapter', 'HBA'),
-	('Host Controller', 'HC'),
+	('Host[- ]Controller', 'HC'), # dash = 1106:3104
 	('Input/Output', 'I/O'),
 	('Integrated ([^\s]+) (?:Graphics|GPU)', '\\2 iGPU'), # VIA CLE266
 	('Integrated (?:Graphics|GPU)', 'iGPU'),
@@ -75,7 +75,7 @@ clean_device_abbr = [
 clean_device_bit_pattern = re.compile('''( |^|\(|\[|\{|/)(?:([0-9]{1,4}) )?(?:(K)(?:ilo)?|(M)(?:ega)?|(G)(?:iga)?)bit( |$|\)|\]|\})''', re.I)
 clean_device_suffix_pattern = re.compile(''' (?:Adapter|Card|Device|(?:Host )?Controller)( (?: [0-9#]+)?|$|\)|\]|\})''', re.I)
 clean_vendor_abbr_pattern = re.compile(''' \[([^\]]+)\]''')
-clean_vendor_suffix_pattern = re.compile('''[ ,.](?:Semiconductors?|(?:Micro)?electronics?|Interactive|Technolog(?:y|ies)|(?:Micro)?systems|Computer(?: works)?|Products|Group|and subsidiaries|of(?: America)?|Co(?:rp(?:oration)?|mpany)?|Inc|LLC|Ltd|GmbH(?: \& .+)?|AB|AG|SA|(?:\(|\[|\{).*)$''', re.I)
+clean_vendor_suffix_pattern = re.compile('''[ ,.](?:Semiconductors?|(?:Micro)?electronics?|Interactive|Technolog(?:y|ies)|(?:Micro)?systems|Computer(?: works)?|Products|Group|and subsidiaries|of(?: America)?|Co(?:rp(?:oration)?|mpany)?|Inc|LLC|Ltd|GmbH(?: & .+)?|AB|AG|SA|(?:\(|\[|\{).*)$''', re.I)
 clean_vendor_force = {
 	'National Semiconductor Corporation': 'NSC',
 }

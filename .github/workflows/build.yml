@@ -31,9 +31,11 @@ jobs:
           cd /opt/pciutils-*
           make CC=i686-linux-gnu-gcc ZLIB=no DNS=no SHARED=no
           sudo make install-lib
-          make clean all CROSS_COMPILE=i686-w64-mingw32- HOST=i586-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+          make clean
+          make all CROSS_COMPILE=i686-w64-mingw32- HOST=i586-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
           sudo make install-lib PREFIX=/usr/i686-w64-mingw32
-          make clean all CROSS_COMPILE=x86_64-w64-mingw32- HOST=x86_64-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+          make clean
+          make all CROSS_COMPILE=x86_64-w64-mingw32- HOST=x86_64-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
           sudo make install-lib PREFIX=/usr/x86_64-w64-mingw32
       - uses: actions/checkout@v4
       - name: Build `cp437`

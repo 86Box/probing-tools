@@ -64,7 +64,7 @@ void     outl(uint16_t port, uint32_t data);
             parm[dx][ax cx] modify[ax cx];
 #    endif
 #else
-#    if defined(__GNUC__) && !defined(__POSIX_UEFI__)
+#    if defined(__GNUC__) && !defined(__POSIX_UEFI__) && !defined(_WIN32)
 #        define inb  sys_inb
 #        define outb sys_outb
 #        define inw  sys_inw

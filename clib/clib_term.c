@@ -17,6 +17,9 @@
  */
 #ifdef __POSIX_UEFI__
 #    include <uefi.h>
+#elif defined(_WIN32)
+#    include <stdio.h>
+#    include <windows.h>
 #else
 #    include <stdio.h>
 #    ifdef __GNUC__
@@ -127,6 +130,54 @@ term_set_cursor_pos(uint8_t x, uint8_t y)
     fflush(stdout);
     return 1;
 }
+#elif defined(_WIN32)
+static CONSOLE_SCREEN_BUFFER_INFO info_cache;
+
+static CONSOLE_SCREEN_BUFFER_INFO *
+term_get_info()
+{
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (h && GetConsoleScreenBufferInfo(h, &info_cache))
+        return &info_cache;
+    return NULL;
+}
+
+int
+term_get_size_x()
+{
+    CONSOLE_SCREEN_BUFFER_INFO *info = term_get_info();
+    return info ? (info->srWindow.Right - info->srWindow.Left + 1) : 80;
+}
+
+int
+term_get_size_y()
+{
+    CONSOLE_SCREEN_BUFFER_INFO *info = term_get_info();
+    return info ? (info->srWindow.Bottom - info->srWindow.Top + 1) : 25;
+}
+
+int
+term_get_cursor_pos(uint8_t *x, uint8_t *y)
+{
+    CONSOLE_SCREEN_BUFFER_INFO *info = term_get_info();
+    if (!info)
+        return 0;
+    *x = info->dwCursorPosition.X;
+    *y = info->dwCursorPosition.Y;
+    return 1;
+}
+
+int
+term_set_cursor_pos(uint8_t x, uint8_t y)
+{
+    COORD coords;
+    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!h)
+        return 0;
+    coords.X = x;
+    coords.Y = y;
+    return !!SetConsoleCursorPosition(h, coords);
+}
 #else
 int
 term_get_size_x()
@@ -170,6 +221,9 @@ term_final_linebreak()
 void
 term_unbuffer_stdout()
 {
+#ifdef _WIN32
+    SetConsoleOutputCP(65001);
+#endif
 }
 
 void

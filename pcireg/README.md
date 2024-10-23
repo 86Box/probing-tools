@@ -1,6 +1,6 @@
 pcireg
 ======
-DOS, UEFI and Linux tool for reading, writing and dumping PCI configuration space registers; scanning the PCI bus; and more.
+DOS, UEFI, Windows and Linux tool for reading, writing (where supported) and dumping PCI configuration space registers; scanning the PCI bus; and more.
 
 Usage
 -----
@@ -41,6 +41,29 @@ Building
 
 * **Linux:** Run `make -f Makefile.uefi ARCH=x86_64` with a GCC toolchain installed.
   * Note that 32-bit UEFI targets are not supported yet.
+
+### Windows target
+
+* **Windows:** Currently not supported due to issues building `pciutils` on MSYS2.
+* **Linux:** Build `pciutils` then `pcireg` itself with a MinGW toolchain installed.
+  * 32-bit:
+  ```
+  git clone https://github.com/pciutils/pciutils.git pciutils
+  cd pciutils
+  make CROSS_COMPILE=i686-w64-mingw32- HOST=i586-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+  sudo make install-lib PREFIX=/usr/i686-w64-mingw32
+  cd ..
+  make -f Makefile.gcc CC=i686-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw
+  ```
+  * 64-bit:
+  ```
+  git clone https://github.com/pciutils/pciutils.git pciutils
+  cd pciutils
+  make CROSS_COMPILE=x86_64-w64-mingw32- HOST=x86_64-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+  sudo make install-lib PREFIX=/usr/x86_64-w64-mingw32
+  cd ..
+  make -f Makefile.gcc CC=x86_64-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw64
+  ```
 
 ### Linux target
 

@@ -17,6 +17,6 @@
 
 export OBJS	= pcireg.o clib_pci.o clib_std.o clib_sys.o clib_term.o
 export DEST	= pcireg
-override LDFLAGS	+= -lpci
+override LDFLAGS	+= -lpci $(LDAPPEND)
 
 include ../clib/gcc.mk

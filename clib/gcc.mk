@@ -18,13 +18,13 @@
 VPATH		= . ../clib
 CC			?= "gcc"
 
-default: $(DEST)
+all: $(DEST)
 
 %.o: %.c $(HEADERS)
 	$(CC) -I../clib $(CFLAGS) -c $< -o $@
 
 $(DEST): $(OBJS)
-	$(CC) $(OBJS) $(LDFLAGS) -o $@
+	$(CC) $(OBJS) $(LDFLAGS) $(LDAPPEND) -o $@
 	chmod +x $@ || true
 
 clean:

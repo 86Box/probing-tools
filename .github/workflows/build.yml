@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Install build tools
-        run: sudo apt update && sudo apt install build-essential crossbuild-essential-i386 xz-utils
+        run: sudo apt update && sudo apt install build-essential crossbuild-essential-i386 gcc-mingw-w64-i686 binutils-mingw-w64-i686 mingw-w64-i686-dev gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 mingw-w64-x86-64-dev xz-utils
       - name: Download OpenWatcom
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -31,6 +31,10 @@ jobs:
           cd /opt/pciutils-*
           make CC=i686-linux-gnu-gcc ZLIB=no DNS=no SHARED=no
           sudo make install-lib
+          make clean all CROSS_COMPILE=i686-w64-mingw32- HOST=i586-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+          sudo make install-lib PREFIX=/usr/i686-w64-mingw32
+          make clean all CROSS_COMPILE=x86_64-w64-mingw32- HOST=x86_64-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
+          sudo make install-lib PREFIX=/usr/x86_64-w64-mingw32
       - uses: actions/checkout@v4
       - name: Build `cp437`
         run: |
@@ -57,7 +61,9 @@ jobs:
           cd ${{ github.workspace }}/pcireg
           wmake
           make -f Makefile.uefi ARCH=x86_64
-          make -f Makefile.gcc clean default CC=i686-linux-gnu-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static
+          make -f Makefile.gcc clean all CC=i686-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw
+          make -f Makefile.gcc clean all CC=x86_64-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw64
+          make -f Makefile.gcc clean all CC=i686-linux-gnu-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static
           python3 pciids.py
       - name: Build `usblgoff`
         run: |

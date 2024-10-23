@@ -1,6 +1,6 @@
 pcireg
 ======
-DOS and UEFI tool for reading, writing and dumping PCI configuration space registers; scanning the PCI bus; and more.
+DOS, UEFI and Linux tool for reading, writing and dumping PCI configuration space registers; scanning the PCI bus; and more.
 
 Usage
 -----
@@ -41,6 +41,10 @@ Building
 
 * **Linux:** Run `make -f Makefile.uefi ARCH=x86_64` with a GCC toolchain installed.
   * Note that 32-bit UEFI targets are not supported yet.
+
+### Linux target
+
+* **Linux:** Run `make -f Makefile.gcc` with a GCC toolchain and development files for `libpci` installed.
 
 ### PCI ID database
 

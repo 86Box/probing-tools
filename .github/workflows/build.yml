@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Install build tools
-        run: sudo apt update && sudo apt install build-essential xz-utils
+        run: sudo apt update && sudo apt install build-essential crossbuild-essential-i386 xz-utils
       - name: Download OpenWatcom
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -23,6 +23,14 @@ jobs:
           mkdir /opt/watcom
           wget -qO- https://github.com/open-watcom/open-watcom-v2/releases/download/2023-12-01-Build/ow-snapshot.tar.xz | tar -Jxv -C /opt/watcom
           echo "/opt/watcom/binl64:/opt/watcom/binl" >> $GITHUB_PATH
+      - name: Download and build libpci
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf /opt/pciutils-*
+          wget -qO- https://github.com/pciutils/pciutils/releases/download/v3.13.0/pciutils-3.13.0.tar.gz | tar -zxv -C /opt
+          cd /opt/pciutils-*
+          make CC=i686-linux-gnu-gcc ZLIB=no DNS=no SHARED=no
+          sudo make install-lib
       - uses: actions/checkout@v2
       - name: Build `cp437`
         run: |
@@ -49,6 +57,7 @@ jobs:
           cd ${{ github.workspace }}/pcireg
           wmake
           make -f Makefile.uefi ARCH=x86_64
+          make -f Makefile.gcc CC=i686-linux-gnu-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static
           python3 pciids.py
       - name: Build `usblgoff`
         run: |
@@ -60,6 +69,7 @@ jobs:
           path: |
             **/*.EXE
             **/*.EFI
+            pcireg/pcireg
             **/*.BIN
             ac97/*.md
             acpi/*.md

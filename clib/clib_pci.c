@@ -20,10 +20,10 @@
 #else
 #    include <stdio.h>
 #endif
+#include "clib_pci.h"
 #ifdef PCI_LIB_VERSION
 #    include <stdarg.h>
 #endif
-#include "clib_pci.h"
 #include "clib_sys.h"
 
 uint8_t pci_mechanism = 0, pci_device_count = 0;
@@ -151,7 +151,7 @@ pci_init_dev(uint8_t bus, uint8_t dev, uint8_t func)
                     pci_setup_cache(pdev, pdev->cache, 0x40 + sizeof(win_notice));
                     pci_read_block(pdev, 0, pdev->cache, 64);
                     if (pdev->cache[0x0e] & 0x7f)
-                        pdev->cache[0x19] = -1;
+                        pdev->cache[0x19] = pdev->cache[0x1a] = -1; /* set unknown secondary/subordinate bus numbers for now */
                     strcpy(&pdev->cache[0x40], win_notice);
                 }
 
@@ -165,7 +165,7 @@ pci_init_dev(uint8_t bus, uint8_t dev, uint8_t func)
                         }
                     }
 
-                    /* Set secondary bus value and cascade subordinate bus value to parents. */
+                    /* Set secondary bus number and cascade subordinate bus number to parents. */
                     other = pdev;
                     while (other->parent) {
                         other->parent->cache[0x19] = other->bus;

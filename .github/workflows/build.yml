@@ -78,7 +78,7 @@ jobs:
             **/*.exe
             **/*.EFI
             pcireg/pcireg
-            **/*.BIN
+            **/*.LHA
             ac97/*.md
             acpi/*.md
             biosdump/*.md

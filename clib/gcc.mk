@@ -21,7 +21,13 @@ CC			?= "gcc"
 all: $(DEST)
 
 %.o: %.c $(HEADERS)
+ifeq "$(CP437_CONV)" "y"
+	../cp437/cp437 $<
+	$(CC) -I../clib $(CFLAGS) -x c -c $<_cp437 -o $@
+	-rm -f $<_cp437
+else
 	$(CC) -I../clib $(CFLAGS) -c $< -o $@
+endif
 
 $(DEST): $(OBJS)
 	$(CC) $(OBJS) $(LDFLAGS) $(LDAPPEND) -o $@

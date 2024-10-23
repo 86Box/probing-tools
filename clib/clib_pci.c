@@ -19,6 +19,8 @@
 #    include <uefi.h>
 #else
 #    include <stdio.h>
+#    include <stdlib.h>
+#    include <string.h>
 #endif
 #include "clib_pci.h"
 #ifdef PCI_LIB_VERSION

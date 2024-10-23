@@ -222,7 +222,7 @@ void
 term_unbuffer_stdout()
 {
 #ifdef _WIN32
-    SetConsoleOutputCP(65001);
+    SetConsoleOutputCP(437);
 #endif
 }
 

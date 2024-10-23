@@ -53,7 +53,7 @@ Building
   make CROSS_COMPILE=i686-w64-mingw32- HOST=i586-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
   sudo make install-lib PREFIX=/usr/i686-w64-mingw32
   cd ..
-  make -f Makefile.gcc CC=i686-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw
+  make -f Makefile.gcc CC=i686-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 CP437_CONV=y DEST=pciregw
   ```
   * 64-bit:
   ```
@@ -62,7 +62,7 @@ Building
   make CROSS_COMPILE=x86_64-w64-mingw32- HOST=x86_64-windows ZLIB=no DNS=no SHARED=no IDSDIR=""
   sudo make install-lib PREFIX=/usr/x86_64-w64-mingw32
   cd ..
-  make -f Makefile.gcc CC=x86_64-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 DEST=pciregw64
+  make -f Makefile.gcc CC=x86_64-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 CP437_CONV=y DEST=pciregw64
   ```
 
 ### Linux target

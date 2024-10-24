@@ -88,7 +88,7 @@ static int calc_sum(unsigned char *p, int len)
 unsigned int
 LH5HeaderParse(unsigned char *Buffer, int BufferSize,
 	       unsigned int *original_size, unsigned int *packed_size,
-	       char **name, unsigned short *crc)
+	       char **name, unsigned short *crc, unsigned char *method)
 {
 	unsigned int offset;
 	unsigned char header_size, checksum, name_length;
@@ -106,8 +106,9 @@ LH5HeaderParse(unsigned char *Buffer, int BufferSize,
 	}
 
 	/* check method */
-	if (memcmp(Buffer + 2, "-lh5-", 5) != 0) {
-		fprintf(stderr, "Error: Compression method is not LZHUFF5.\n");
+	*method = Buffer[5];
+	if (Buffer[2] != '-' || Buffer[3] != 'l' || Buffer[4] != 'h' || (*method != '0' && *method != '5') || Buffer[6] != '-') {
+		fprintf(stderr, "Error: Compression method %c is not supported.\n", method);
 		return 0;
 	}
 

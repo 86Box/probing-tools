@@ -22,16 +22,12 @@
 unsigned int LH5HeaderParse(unsigned char *Buffer, int BufferSize,
 			    unsigned int *original_size,
 			    unsigned int *packed_size,
-			    char **name, unsigned short *crc);
+			    char **name, unsigned short *crc,
+			    unsigned char *method);
 
 unsigned short CRC16Calculate(unsigned char *Buffer, int BufferSize);
 
 int LH5Decode(unsigned char *PackedBuffer, int PackedBufferSize,
 	      unsigned char *OutputBuffer, int OutputBufferSize);
-
-extern int lzari_in_bruteforce;
-int unlzari(unsigned char *in, int insz, unsigned char *out, int outsz, char common);
-
-int unlzh(unsigned char *in, int insz, unsigned char *out, int outsz);
 
 #endif				/* LH5_EXTRACT_H */

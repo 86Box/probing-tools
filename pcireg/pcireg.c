@@ -180,6 +180,7 @@ pciids_open_database(void **ptr, char id)
     char          *filename;
     char           target_filename[13];
     unsigned short crc;
+    unsigned char  method;
     uint8_t       *buf = NULL;
 
     /* No action is required if the database is already loaded. */
@@ -204,7 +205,7 @@ pciids_open_database(void **ptr, char id)
             break;
 
         /* Parse LHA header. */
-        header_size = LH5HeaderParse(header, sizeof(header), &original_size, &packed_size, &filename, &crc);
+        header_size = LH5HeaderParse(header, sizeof(header), &original_size, &packed_size, &filename, &crc, &method);
         if (!header_size)
             break; /* invalid header */
 
@@ -216,7 +217,7 @@ pciids_open_database(void **ptr, char id)
             *ptr = malloc(original_size);
             if (!*ptr)
                 goto fail;
-            buf = malloc(packed_size);
+            buf = (method != '0') ? malloc(packed_size) : *ptr;
             if (!buf)
                 goto fail;
 
@@ -224,12 +225,13 @@ pciids_open_database(void **ptr, char id)
             fseek(f, pos + header_size, SEEK_SET);
             if (!fread(buf, packed_size, 1, f))
                 goto fail;
-            if (LH5Decode(buf, packed_size, *ptr, original_size) == -1)
+            if ((method != '0') && (LH5Decode(buf, packed_size, *ptr, original_size) == -1))
                 goto fail;
 
             /* All done, close archive. */
             fclose(f);
-            free(buf);
+            if (buf != *ptr)
+                free(buf);
             return 0;
         }
 

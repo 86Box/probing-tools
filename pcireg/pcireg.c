@@ -185,6 +185,7 @@ pciids_open_database(void **ptr, char id)
     /* No action is required if the database is already loaded. */
     if (*ptr)
         return 0;
+    fflush(stdout);
 
     /* Open archive, and stop if the open failed. */
     f = fopen("PCIIDS.LHA", "r" FOPEN_BINARY);
@@ -1292,7 +1293,7 @@ retry_pcibios:
                 /* Determine slot type by location and class. */
                 if ((entry->dev == 1) && (dev_class == 0x0604)) {
                     printf("AGPBRIDGE,  ");
-                } else if (dev_class == 0x0601) {
+                } else if (dev_class == 0x0601) { /* ISA bridge */
                     printf("SOUTHBRIDGE,");
                 } else if (entry->slot == 0) {
                     /* Very likely to be an onboard device. */

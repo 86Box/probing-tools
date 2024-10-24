@@ -571,16 +571,23 @@ dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
     return 0;
 }
 
-static int
-scan_bus(uint8_t bus, int nesting, char dump, char *buf)
+static uint16_t
+scan_bus(uint8_t bus, unsigned int nesting, char *nesting_buf, char dump, char *buf)
 {
-    int     i, j, count, last_count, children;
+    int     i, j;
     char   *temp;
-    uint8_t dev, func, header_type, new_bus, row, column;
+    uint8_t dev;
+    uint8_t func;
+    uint8_t header_type;
+    uint8_t is_last = 0;
     multi_t dev_id, dev_rev_class;
+    uint16_t ret = 0;
+
+    /* Perform a recursive scan to determine the highest device. */
+    if (buf)
+        ret = scan_bus(bus, nesting, NULL, dump, NULL);
 
     /* Iterate through devices. */
-    count = 0;
     for (dev = 0; dev < pci_device_count; dev++) {
         /* Iterate through functions. */
         for (func = 0; func < 8; func++) {
@@ -596,22 +603,26 @@ scan_bus(uint8_t bus, int nesting, char dump, char *buf)
             dev_id.u32 = pci_readl(bus, dev, func, 0x00);
 #endif
 
+            i = (dev << 8) | func;
+            is_last = i >= ret;
             /* Report a valid ID. */
             if (dev_id.u32 && (dev_id.u32 != 0xffffffff)) {
-                /* Clear vendor/device name buffer while adding nested bus spacing if required. */
-                if (nesting) {
-                    j = (nesting << 1) - 2;
-                    for (i = 0; i < j; i++)
-                        buf[i] = ' ';
-                    buf[i] = '\0';
-                    sprintf(&buf[strlen(buf)], "└─");
-                } else {
-                    buf[0] = '\0';
+                if (!buf) {
+                    ret = i;
+                    goto next_func;
                 }
 
                 /* Print device address and IDs. */
                 printf(" %02X  %02X  %d  [%04X:%04X] ", bus, dev, func,
                        dev_id.u16[0], dev_id.u16[1]);
+
+                /* Clear vendor/device name buffer while adding nested bus spacing if required. */
+                i = term_width - 24;
+                if (bus != 0) {
+                    printf("%s%s", nesting_buf, is_last ? "└─" : "├─");
+                    i -= nesting << 1;
+                }
+                buf[0] = '\0';
 
                 /* Read revision and class ID. */
 #ifdef DEBUG
@@ -624,78 +635,53 @@ scan_bus(uint8_t bus, int nesting, char dump, char *buf)
                 /* Look up vendor name in the PCI ID database. */
                 temp = pciids_get_vendor(dev_id.u16[0]);
                 if (temp) {
-                    /* Add vendor name to buffer. */
-                    strcat(buf, temp);
-                    strcat(buf, " ");
+                    /* Print vendor name. */
+                    i -= printf("%s ", temp);
 
                     /* Look up device name. */
                     temp = pciids_get_device(dev_id.u16[1]);
-                    if (temp) {
-                        /* Add device name to buffer. */
-                        strcat(buf, temp);
-                    } else {
-                        /* Device name not found. */
+                    if (temp)
+                        strcpy(&buf[strlen(buf)], temp);
+                    else /* name not found */
                         goto unknown_device;
-                    }
                 } else {
                     /* Vendor name not found. */
-                    strcat(buf, "[Unknown] ");
+                    i -= printf("[Unknown] ");
 
 unknown_device: /* Look up class ID. */
                     temp = pciids_get_subclass(dev_rev_class.u8[3], dev_rev_class.u8[2]);
-                    if (temp) {
-                        /* Add class name to buffer. */
+                    if (temp)
                         sprintf(&buf[strlen(buf)], "[%s]", temp);
-                    } else {
-                        /* Class name not found. */
+                    else /* name not found */
                         sprintf(&buf[strlen(buf)], "[Class %02X:%02X:%02X]", dev_rev_class.u8[3], dev_rev_class.u8[2], dev_rev_class.u8[1]);
-                    }
                 }
 
                 /* Limit buffer to screen width, then print it with the revision ID. */
-                i = term_width - strlen(buf) - 24;
-                if (i >= 9) {
-                    sprintf(&buf[strlen(buf)], " (rev %02X)", dev_rev_class.u8[0]);
+                j = i - strlen(buf);
+                if (j >= 9) {
+                    temp = "%s (rev %02X)";
+                } else if (j == 8) {
+                    temp = "%s (rv %02X)";
+                } else if (j == 7) {
+                    temp = "%s (r %02X)";
+                } else if (j == 6) {
+                    temp = "%s (r%02X)";
+                } else if (j == 5) {
+                    temp = "%s (%02X)";
                 } else {
-                    if (i >= 5)
-                        strcat(buf, " ");
-                    else if (i < 4)
-                        strcpy(&buf[term_width - 32], "... ");
-                    sprintf(&buf[strlen(buf)], "(%02X)", dev_rev_class.u8[0]);
+                    temp = "%s(%02X)";
+                    if (j < 4)
+                        strcpy(&buf[i - 5], "►");
                 }
-                printf("%s", buf);
+                i -= printf(temp, buf, dev_rev_class.u8[0]);
 
                 /* Move on to the next line if the terminal didn't already do that for us. */
-                if (term_width > (strlen(buf) + 24))
+                if (i > 0)
                     putchar('\n');
-
-                /* Rectify previous nesting indicator when nesting buses. */
-                if (nesting && count && term_get_cursor_pos(&column, &row)) {
-                    i = 22 + (nesting << 1);
-                    j = row - 2;
-                    if (children > j)
-                        children = j;
-                    while (children) {
-                        term_set_cursor_pos(i, j);
-                        printf("│");
-                        children--;
-                        j--;
-                    }
-                    if (j != 0xff) {
-                        term_set_cursor_pos(i, j);
-                        printf("├");
-                    }
-
-                    /* Restore cursor position. */
-                    term_set_cursor_pos(column, row);
-                }
 
                 /* Dump registers if requested. */
                 if (dump)
                     dump_regs(bus, dev, func, 0, '.');
-
-                /* Increment device count. */
-                count++;
             } else {
                 /* Stop or move on to the next function if there's nothing here. */
                 if (func)
@@ -704,6 +690,7 @@ unknown_device: /* Look up class ID. */
                     break;
             }
 
+next_func:
             /* Read header type. */
 #ifdef DEBUG
             header_type = (bus < (DEBUG - 1)) ? 0x01 : 0x00;
@@ -712,19 +699,20 @@ unknown_device: /* Look up class ID. */
 #endif
 
             /* If this is a bridge, mark that we should probe its bus. */
-            if (header_type & 0x7f) {
-                /* Read bus numbers. */
+            if (buf && (header_type & 0x7f)) {
+                /* Read bus number. */
 #ifdef DEBUG
-                new_bus = bus + 1;
+                j = bus + 1;
 #else
-                new_bus = pci_readb(bus, dev, func, 0x19);
+                j = pci_readb(bus, dev, func, 0x19);
 #endif
 
-                /* Scan the secondary bus. */
-                children = scan_bus(new_bus, nesting + 1, dump, buf);
-                count += children;
-            } else {
-                children = 0;
+                /* Scan the secondary bus with an added nesting layer. */
+                i = strlen(nesting_buf);
+                if (nesting > 0)
+                    sprintf(&nesting_buf[i], is_last ? "  " : "│ ");
+                scan_bus(j, nesting + 1, nesting_buf, dump, buf);
+                nesting_buf[i] = '\0';
             }
 
             /* If we're at the first function, stop if this is not a multi-function device. */
@@ -733,7 +721,7 @@ unknown_device: /* Look up class ID. */
         }
     }
 
-    return count;
+    return ret;
 }
 
 static int
@@ -741,10 +729,13 @@ scan_buses(char dump)
 {
     int   i;
     char *buf;
+    char *nesting_buf;
 
     /* Initialize buffers. */
-    buf = malloc(1024);
-    memset(buf, 0, 1024);
+    buf = malloc(256);
+    buf[0] = '\0';
+    nesting_buf = malloc(256);
+    nesting_buf[0] = '\0';
 
     /* Get terminal size. */
     term_width = term_get_size_x();
@@ -755,10 +746,11 @@ scan_buses(char dump)
         printf("─");
 
     /* Scan the root bus. */
-    scan_bus(0, 0, dump, buf);
+    scan_bus(0, 0, nesting_buf, dump, buf);
 
     /* Clean up. */
     free(buf);
+    free(nesting_buf);
 
     return 0;
 }

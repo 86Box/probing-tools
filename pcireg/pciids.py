@@ -25,17 +25,19 @@ def main():
 	# Start databases.
 	vendor_db = device_db = subdevice_db = class_db = subclass_db = progif_db = string_db = b''
 	vendor_devices_offset = {}
-	string_db_lookup = {}
 	device_db_pos = subdevice_db_pos = 0
 	vendor_has_termination = device_has_termination = class_has_termination = subclass_has_termination = progif_has_termination = False
 
 	def string_db_add(s):
 		if not s:
 			return 0xffffffff
-		string_db_pos = string_db_lookup.get(s, None)
-		if string_db_pos == None:
-			nonlocal string_db
-			string_db_pos = string_db_lookup[s] = len(string_db)
+		nonlocal string_db
+		# This basic trailing substring detection appears to be the best optimization
+		# we can do for our LHA-compressed target. Ideally, we'd sort the strings by
+		# descending length beforehand, but that resulted in much worse compression.
+		string_db_pos = string_db.find(s + b'\x00')
+		if string_db_pos == -1:
+			string_db_pos = len(string_db)
 			string_db += s + b'\x00'
 		return string_db_pos
 

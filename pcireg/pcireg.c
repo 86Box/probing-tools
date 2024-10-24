@@ -180,7 +180,7 @@ pciids_open_database(void **ptr, char id)
     char          *filename;
     char           target_filename[13];
     unsigned short crc;
-    uint8_t       *buf;
+    uint8_t       *buf = NULL;
 
     /* No action is required if the database is already loaded. */
     if (*ptr)
@@ -189,10 +189,8 @@ pciids_open_database(void **ptr, char id)
 
     /* Open archive, and stop if the open failed. */
     f = fopen("PCIIDS.LHA", "r" FOPEN_BINARY);
-    if (!f) {
-        f = NULL;
+    if (!f)
         return 1;
-    }
 
     /* Generate target filename. */
     strcpy(target_filename, "PCIIDS_@.BIN");
@@ -214,14 +212,12 @@ pciids_open_database(void **ptr, char id)
         crc = !strcmp(filename, target_filename);
         free(filename);
         if (crc) {
-            /* Allocate buffer for reading the compressed data. */
-            buf = malloc(packed_size);
-            if (!buf)
-                goto fail;
-
-            /* Allocate buffer for the decompressed data. */
+            /* Allocate buffers for the compressed and decompressed data. */
             *ptr = malloc(original_size);
             if (!*ptr)
+                goto fail;
+            buf = malloc(packed_size);
+            if (!buf)
                 goto fail;
 
             /* Read and decompress data. */
@@ -233,6 +229,7 @@ pciids_open_database(void **ptr, char id)
 
             /* All done, close archive. */
             fclose(f);
+            free(buf);
             return 0;
         }
 
@@ -244,6 +241,12 @@ fail:
     /* Entry not found or read/decompression failed. */
     printf("PCI ID database %c decompression failed\n", id);
     fclose(f);
+    if (*ptr) {
+        free(*ptr);
+        *ptr = NULL;
+    }
+    if (buf)
+        free(buf);
     return 1;
 }
 

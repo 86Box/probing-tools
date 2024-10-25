@@ -188,14 +188,22 @@ pciids_open_database(void **ptr, char id)
         return 0;
     fflush(stdout);
 
-    /* Open archive, and stop if the open failed. */
-    f = fopen("PCIIDS.LHA", "r" FOPEN_BINARY);
-    if (!f)
-        return 1;
-
     /* Generate target filename. */
     strcpy(target_filename, "PCIIDS_@.BIN");
     target_filename[7] = id;
+
+    /* Open archive or uncompressed database, and stop if none could be opened. */
+    f = fopen("PCIIDS.LHA", "r" FOPEN_BINARY);
+    if (!f) {
+        f = fopen(target_filename, "r" FOPEN_BINARY);
+        if (!f)
+            return 1;
+        fseek(f, 0, SEEK_END);
+        original_size = packed_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        method = '0';
+        goto found;
+    }
 
     /* Go through archive. */
     while (!feof(f)) {
@@ -213,6 +221,7 @@ pciids_open_database(void **ptr, char id)
         crc = !strcmp(filename, target_filename);
         free(filename);
         if (crc) {
+found:
             /* Allocate buffers for the compressed and decompressed data. */
             *ptr = malloc(original_size);
             if (!*ptr)
@@ -221,7 +230,7 @@ pciids_open_database(void **ptr, char id)
             if (!buf)
                 goto fail;
 
-            /* Read and decompress data. */
+            /* Read and optionally decompress data. */
             fseek(f, pos + header_size, SEEK_SET);
             if (!fread(buf, packed_size, 1, f))
                 goto fail;
@@ -230,7 +239,7 @@ pciids_open_database(void **ptr, char id)
 
             /* All done, close archive. */
             fclose(f);
-            if (buf != *ptr)
+            if (method != '0')
                 free(buf);
             return 0;
         }

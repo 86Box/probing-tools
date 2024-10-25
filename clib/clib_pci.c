@@ -30,7 +30,7 @@
 
 uint8_t pci_mechanism = 0, pci_device_count = 0;
 #ifdef PCI_LIB_VERSION
-static struct pci_access *pacc;
+struct pci_access        *pacc;
 static struct pci_dev    *pdev = NULL;
 #    if defined(_WIN32) && (PCI_LIB_VERSION >= 0x030800)
 #        define DUMMY_CONFIG_SPACE

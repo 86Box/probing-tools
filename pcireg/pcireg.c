@@ -112,8 +112,12 @@ static struct PACKED {
 #    pragma pack(pop)
 #endif
 
-static int pciids_cur_vendor;
-static int pciids_cur_device;
+static int   pciids_cur_vendor = -1;
+static int   pciids_cur_device = -1;
+static char *pciids_lookup;
+#ifdef PCI_LIB_VERSION
+static char  pciids_buf[256];
+#endif
 #pragma pack(push, 1)
 static struct PACKED {
     uint16_t vendor_id;
@@ -297,18 +301,26 @@ pciids_get_vendor(uint16_t vendor_id)
     if (find_vendor(vendor_id))
         return pciids_read_string(pciids_vendor[pciids_cur_vendor].string_offset);
 
+#ifdef PCI_LIB_VERSION
+    /* Find vendor ID in the system pci.ids. */
+    pciids_cur_vendor = -1;
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_VENDOR | PCI_LOOKUP_NO_NUMBERS, vendor_id);
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the vendor ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static char *
-pciids_get_device(uint16_t device_id)
+pciids_get_device(uint16_t vendor_id, uint16_t device_id)
 {
     /* Must be preceded by a call to {find|get}_vendor to establish the vendor ID! */
 
     /* Open database if required. */
-    if (pciids_open_database((void **) &pciids_device, 'D'))
-        return NULL;
+    if ((pciids_cur_vendor < 0) || pciids_open_database((void **) &pciids_device, 'D'))
+        goto no_device_db;
 
     /* Go through device entries until the ID is matched or overtaken. */
     for (pciids_cur_device = pciids_vendor[pciids_cur_vendor].devices_offset; pciids_device[pciids_cur_device].device_id < device_id; pciids_cur_device++)
@@ -318,19 +330,28 @@ pciids_get_device(uint16_t device_id)
     if (pciids_device[pciids_cur_device].device_id == device_id)
         return pciids_read_string(pciids_device[pciids_cur_device].string_offset);
 
+no_device_db:
+#ifdef PCI_LIB_VERSION
+    /* Find device ID in the system pci.ids. */
+    pciids_cur_device = -1;
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_DEVICE | PCI_LOOKUP_NO_NUMBERS, vendor_id, device_id);
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the device ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static char *
-pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
+pciids_get_subdevice(uint16_t vendor_id, uint16_t device_id, uint16_t subvendor_id, uint16_t subdevice_id)
 {
     /* Must be preceded by calls to {find|get}_vendor and get_device to establish the vendor/device ID! */
     int i;
 
     /* Open database if required. */
-    if (pciids_open_database((void **) &pciids_subdevice, 'S'))
-        return NULL;
+    if ((pciids_cur_device < 0) || pciids_open_database((void **) &pciids_subdevice, 'S'))
+        goto no_subdevice_db;
 
     /* Go through subdevice entries until the ID is matched or overtaken. */
     for (i = pciids_device[pciids_cur_device].subdevices_offset; (pciids_subdevice[i].subvendor_id < subvendor_id) || (pciids_subdevice[i].subdevice_id < subdevice_id); i++)
@@ -340,8 +361,16 @@ pciids_get_subdevice(uint16_t subvendor_id, uint16_t subdevice_id)
     if ((pciids_subdevice[i].subvendor_id == subvendor_id) && (pciids_subdevice[i].subdevice_id == subdevice_id))
         return pciids_read_string(pciids_subdevice[i].string_offset);
 
+no_subdevice_db:
+#ifdef PCI_LIB_VERSION
+    /* Find subdevice ID in the system pci.ids. */
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_SUBSYSTEM | PCI_LOOKUP_DEVICE | PCI_LOOKUP_NO_NUMBERS, vendor_id, device_id, subvendor_id, subdevice_id);
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the subdevice ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static char *
@@ -351,7 +380,7 @@ pciids_get_class(uint8_t class_id)
 
     /* Open database if required. */
     if (pciids_open_database((void **) &pciids_class, 'C'))
-        return NULL;
+        goto no_class_db;
 
     /* Go through class entries until the ID is matched or overtaken. */
     for (i = 0; pciids_class[i].class_id < class_id; i++)
@@ -361,8 +390,16 @@ pciids_get_class(uint8_t class_id)
     if (pciids_class[i].class_id == class_id)
         return pciids_read_string(pciids_class[i].string_offset);
 
+no_class_db:
+#ifdef PCI_LIB_VERSION
+    /* Find class ID in the system pci.ids. */
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_CLASS | PCI_LOOKUP_NO_NUMBERS, (class_id << 8) | 0x80); /* no way to look up by class without subclass, but several classes repeat their name in subclass 80 */
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the class ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static char *
@@ -372,7 +409,7 @@ pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
 
     /* Open database if required. */
     if (pciids_open_database((void **) &pciids_subclass, 'U'))
-        return NULL;
+        goto no_subclass_db;
 
     /* Go through subclass entries until the ID is matched or overtaken. */
     for (i = 0; (pciids_subclass[i].class_id < class_id) || (pciids_subclass[i].subclass_id < subclass_id); i++)
@@ -382,8 +419,16 @@ pciids_get_subclass(uint8_t class_id, uint8_t subclass_id)
     if ((pciids_subclass[i].class_id == class_id) && (pciids_subclass[i].subclass_id == subclass_id))
         return pciids_read_string(pciids_subclass[i].string_offset);
 
+no_subclass_db:
+#ifdef PCI_LIB_VERSION
+    /* Find subclass ID in the system pci.ids. */
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_CLASS | PCI_LOOKUP_NO_NUMBERS, (class_id << 8) | subclass_id);
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the subclass ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static char *
@@ -393,7 +438,7 @@ pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
 
     /* Open database if required. */
     if (pciids_open_database((void **) &pciids_progif, 'P'))
-        return NULL;
+        goto no_progif_db;
 
     /* Go through programming interface entries until the ID is matched or overtaken. */
     for (i = 0; (pciids_progif[i].class_id < class_id) || (pciids_progif[i].subclass_id < subclass_id) || (pciids_progif[i].progif_id < progif_id); i++)
@@ -403,8 +448,16 @@ pciids_get_progif(uint8_t class_id, uint8_t subclass_id, uint8_t progif_id)
     if ((pciids_progif[i].class_id == class_id) && (pciids_progif[i].subclass_id == subclass_id) && (pciids_progif[i].progif_id == progif_id))
         return pciids_read_string(pciids_progif[i].string_offset);
 
+no_progif_db:
+#ifdef PCI_LIB_VERSION
+    /* Find programming interface ID in the system pci.ids. */
+    pciids_lookup = pci_lookup_name(pacc, pciids_buf, sizeof(pciids_buf), PCI_LOOKUP_PROGIF | PCI_LOOKUP_NO_NUMBERS, (class_id << 8) | subclass_id, progif_id);
+#else
+    pciids_lookup = NULL;
+#endif
+
     /* Return nothing if the programming interface ID was not found. */
-    return NULL;
+    return pciids_lookup;
 }
 
 static int
@@ -650,7 +703,7 @@ scan_bus(uint8_t bus, unsigned int nesting, char *nesting_buf, char dump, char *
                     i -= printf("%s ", temp);
 
                     /* Look up device name. */
-                    temp = pciids_get_device(dev_id.u16[1]);
+                    temp = pciids_get_device(dev_id.u16[0], dev_id.u16[1]);
                     if (temp)
                         strcpy(&buf[strlen(buf)], temp);
                     else /* name not found */
@@ -828,7 +881,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     printf("\nDevice: [%04X] ", reg_val.u16[1]);
 
     /* Print device name if found. */
-    temp = pciids_get_device(reg_val.u16[1]);
+    temp = pciids_get_device(i = reg_val.u16[0], j = reg_val.u16[1]);
     if (temp)
         printf("%s", temp ? temp : "[Unknown]");
 
@@ -876,7 +929,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
             printf("\nSubdevice: [%04X] ", reg_val.u16[1]);
 
             /* Print subdevice ID if found. */
-            temp = pciids_get_subdevice(reg_val.u16[0], reg_val.u16[1]);
+            temp = pciids_get_subdevice(i, j, reg_val.u16[0], reg_val.u16[1]);
             printf("%s", temp ? temp : "[Unknown]");
         }
     }

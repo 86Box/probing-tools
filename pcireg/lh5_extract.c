@@ -108,7 +108,7 @@ LH5HeaderParse(unsigned char *Buffer, int BufferSize,
 	/* check method */
 	*method = Buffer[5];
 	if (Buffer[2] != '-' || Buffer[3] != 'l' || Buffer[4] != 'h' || (*method != '0' && *method != '5') || Buffer[6] != '-') {
-		fprintf(stderr, "Error: Compression method %c is not supported.\n", method);
+		fprintf(stderr, "Error: Compression method %c is not supported.\n", *method);
 		return 0;
 	}
 

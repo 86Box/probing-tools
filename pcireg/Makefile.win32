@@ -6,17 +6,24 @@
 #
 #		This file is part of the 86Box Probing Tools distribution.
 #
-#		Makefile for compiling C-based tools with gcc.
+#		Makefile for compiling C-based tools with MinGW gcc.
 #
 #
 #
 # Authors:	RichardG, <richardg867@gmail.com>
 #
-#		Copyright 2023 RichardG.
+#		Copyright 2024 RichardG.
 # 
 
-export OBJS	= pcireg.o lh5_extract.o clib_pci.o clib_std.o clib_sys.o clib_term.o
-export DEST	= pcireg
-override LDFLAGS += -lpci
+ifeq "$(X64)" "y"
+override CC		= x86_64-w64-mingw32-gcc
+override DEST		= pciregw64.exe
+else
+override CC		= i686-w64-mingw32-gcc
+override DEST		= pciregw.exe
+endif
+export CP437_CONV	?= y
+override LDFLAGS	+= -static
+override LDAPPEND	+= -lcfgmgr32
 
-include ../clib/gcc.mk
+include Makefile.gcc

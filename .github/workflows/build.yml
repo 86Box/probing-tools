@@ -63,8 +63,8 @@ jobs:
           cd ${{ github.workspace }}/pcireg
           wmake
           make -f Makefile.uefi ARCH=x86_64
-          make -f Makefile.gcc clean all CC=i686-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 CP437_CONV=y DEST=pciregw
-          make -f Makefile.gcc clean all CC=x86_64-w64-mingw32-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static LDAPPEND=-lcfgmgr32 CP437_CONV=y DEST=pciregw64
+          make -f Makefile.win32 clean all X64=n
+          make -f Makefile.win32 clean all X64=y
           make -f Makefile.gcc clean all CC=i686-linux-gnu-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static
       - name: Build `usblgoff`
         run: |

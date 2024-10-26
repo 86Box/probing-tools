@@ -16,7 +16,14 @@
 #
 
 VPATH		= . ../clib
-CC			?= "gcc"
+CC		?= "gcc"
+ifneq "$(shell $(CC) -dumpmachine | grep -w i.86)" ""
+CFLAGS		+= -march=i386
+else
+ifneq "$(shell $(CC) -dumpmachine | grep -w x86_64)" ""
+CFLAGS		+= -march=x86-64
+endif
+endif
 
 all: $(DEST)
 

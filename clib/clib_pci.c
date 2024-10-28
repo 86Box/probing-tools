@@ -221,6 +221,8 @@ int
 pci_init()
 {
 #ifdef PCI_LIB_VERSION
+    char *debug;
+
     pacc = pci_alloc();
     if (!pacc) {
         printf("Failed to allocate pci_access structure.\n");
@@ -228,6 +230,8 @@ pci_init()
         return pci_mechanism;
     }
 
+    debug = getenv("LIBPCI_DEBUG");
+    pacc->debugging = debug && debug[0];
     pacc->error = pacc->warning = pacc->debug = pci_printf;
     libpci_init(pacc);
 

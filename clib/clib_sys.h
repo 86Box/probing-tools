@@ -30,6 +30,11 @@ extern void     cli();
 extern void     sti();
 #endif
 
+/* Time functions. */
+#ifndef __WATCOMC__
+extern void     delay(unsigned int ms);
+#endif
+
 /* Port I/O functions. */
 #ifdef __WATCOMC__
 uint8_t inb(uint16_t port);

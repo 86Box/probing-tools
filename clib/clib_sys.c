@@ -16,6 +16,13 @@
  *
  */
 #include "clib_sys.h"
+#ifdef __POSIX_UEFI__
+#    include <uefi.h>
+#elif defined(_WIN32)
+#    include <windows.h>
+#elif defined(__GNUC__) && !defined(__POSIX_UEFI__)
+#    include <unistd.h>
+#endif
 
 /* Interrupt functions. */
 #ifdef __WATCOMC__
@@ -41,6 +48,19 @@ cli()
 void
 sti()
 {
+}
+#endif
+
+/* Time functions. */
+#ifndef __WATCOMC__
+void
+delay(unsigned int ms)
+{
+#    ifdef _WIN32
+    Sleep(ms);
+#    else
+    usleep(ms * 1000);
+#    endif
 }
 #endif
 

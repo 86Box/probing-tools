@@ -464,7 +464,7 @@ static int
 dump_regs(uint8_t bus, uint8_t dev, uint8_t func, uint8_t start_reg, char sz)
 {
     int     i, width, flags, bar_id;
-    char    buf[13];
+    char    buf[16];
     uint8_t cur_reg, regs[256], dev_type, bar_reg;
     multi_t reg_val;
     FILE   *f;

@@ -59,6 +59,10 @@ jobs:
         run: |
           cd ${{ github.workspace }}/isapnp
           wmake
+      - name: Build `kbtest`
+        run: |
+          cd ${{ github.workspace }}/kbtest
+          wmake
       - name: Build `pcireg`
         run: |
           cd ${{ github.workspace }}/pcireg
@@ -84,6 +88,7 @@ jobs:
             acpi/*.md
             biosdump/*.md
             isapnp/*.md
+            kbtest/*.md
             pcireg/*.md
             usblgoff/*.md
 

@@ -35,7 +35,7 @@ codec_probe(uint16_t (*codec_read)(uint8_t reg),
 {
     uint8_t  cur_reg = 0;
     uint16_t regs[64], *regp = regs;
-    char     buf[13];
+    char     buf[16];
     FILE    *f;
 
     /* Reset codec. */

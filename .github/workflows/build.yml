@@ -46,6 +46,7 @@ jobs:
         run: |
           cd ${{ github.workspace }}/ac97
           wmake
+          make -f Makefile.gcc clean all CC=i686-linux-gnu-gcc CFLAGS=-I/usr/local/include LDFLAGS=-static
       - name: Build `acpi`
         run: |
           cd ${{ github.workspace }}/acpi

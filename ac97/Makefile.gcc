@@ -17,6 +17,6 @@
 
 export OBJS	= ac97.o clib_pci.o clib_sys.o clib_term.o
 export DEST	= ac97
-export CFLAGS	= -lpci
+override LDFLAGS += -lpci
 
 include ../clib/gcc.mk

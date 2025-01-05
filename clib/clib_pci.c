@@ -136,6 +136,21 @@ pci_printf(char *msg, ...)
     va_end(ap);
 }
 
+#    ifndef PCI_NONRET
+#        define PCI_NONRET
+#    endif
+PCI_NONRET static void
+pci_fatal(char *msg, ...)
+{
+    va_list ap;
+
+    va_start(ap, msg);
+    vfprintf(stderr, msg, ap);
+    putc('\n', stderr);
+    va_end(ap);
+    exit(1);
+}
+
 static void
 pci_init_dev(uint8_t bus, uint8_t dev, uint8_t func)
 {
@@ -232,7 +247,8 @@ pci_init()
 
     debug = getenv("LIBPCI_DEBUG");
     pacc->debugging = debug && debug[0];
-    pacc->error = pacc->warning = pacc->debug = pci_printf;
+    pacc->warning = pacc->debug = pci_printf;
+    pacc->error = pci_fatal;
     libpci_init(pacc);
 
     pci_mechanism    = 1;

@@ -81,6 +81,7 @@ jobs:
           path: |
             **/*.EXE
             **/*.EFI
+            ac97/ac97
             pcireg/pcireg
             pcireg/pcireg*.exe
             **/*.LHA

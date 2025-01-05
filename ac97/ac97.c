@@ -215,6 +215,16 @@ audiopci_probe(uint16_t dev_id)
     if (!io_base)
         return;
 
+    /* Reset codec. */
+    if (((dev_id == 0x1371) && ((rev == 0x07) || (rev == 0x08))) || (dev_id == 0x5880)) {
+        /* CT5880-specific codec wakeup routine. */
+        outl(io_base | 0x04, 0x20000000);
+        delay(20); /* drivers agree on 20ms */
+    }
+    outl(io_base, 0x00004000);
+    delay(1); /* drivers agree on 20us */
+    outl(io_base, 0x00000000);
+
     printf("GPIO readout [%02X]\n", inb(io_base | 0x02));
 
     /* Perform codec probe. */

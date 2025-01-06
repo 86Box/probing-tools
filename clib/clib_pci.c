@@ -136,10 +136,10 @@ pci_printf(char *msg, ...)
     va_end(ap);
 }
 
-#    ifndef PCI_NONRET
-#        define PCI_NONRET
+#    ifdef PCI_NONRET
+PCI_NONRET
 #    endif
-PCI_NONRET static void
+static void
 pci_fatal(char *msg, ...)
 {
     va_list ap;

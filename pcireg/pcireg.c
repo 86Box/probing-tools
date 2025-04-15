@@ -982,7 +982,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
 
     /* Print interrupt if present. */
     if (reg_val.u16[0] && (reg_val.u8[0] != 0xff))
-        printf("\nInterrupt: INT%c (IRQ %d)", '@' + (reg_val.u8[1] & 15), reg_val.u8[0] & 15);
+        printf("\nInterrupt: INT%c (IRQ %d)", '@' + (reg_val.u8[1] & 15), reg_val.u8[0]);
 
     /* Print latency and grant if available. */
     if ((header_type & 0x7f) == 0x00) {

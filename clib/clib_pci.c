@@ -203,10 +203,12 @@ pci_init_dev(uint8_t bus, uint8_t dev, uint8_t func)
                     /* Perform scan to fill in some values. */
                     for (pdev = pacc->devices; pdev; pdev = pdev->next) {
                         /* Perform recursive scan to set multi-function bit if another function is present. */
-                        for (other = pacc->devices; other; other = other->next) {
-                            if (!pdev->func && (other->domain == pdev->domain) && (other->bus == pdev->bus) && (other->dev == pdev->dev) && other->func) {
-                                pdev->cache[0x0e] |= 0x80;
-                                break;
+                        if (!pdev->func) {
+                            for (other = pacc->devices; other; other = other->next) {
+                                if ((other->domain == pdev->domain) && (other->bus == pdev->bus) && (other->dev == pdev->dev) && other->func) {
+                                    pdev->cache[0x0e] |= 0x80;
+                                    break;
+                                }
                             }
                         }
 

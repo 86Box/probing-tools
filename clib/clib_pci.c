@@ -179,7 +179,7 @@ pci_init_dev(uint8_t bus, uint8_t dev, uint8_t func)
                             pdev->bus = i;
                         } else {
                             /* Flag this bus as taken, in the unlikely case that not all bus number lookups fail. */
-                            dummy_buses[i] = pdev->parent;
+                            dummy_buses[pdev->bus] = pdev->parent;
                         }
                     }
                 }

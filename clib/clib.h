@@ -42,7 +42,7 @@
 #    define FMT_FLOAT_SUPPORTED 1
 #    define FOPEN_BINARY "b"
 #endif
-#if !defined(MSDOS) || defined(M_I386)
+#if !defined(__DOS__) || defined(__PMODEW__)
 #    define IS_32BIT 1
 #endif
 

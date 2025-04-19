@@ -28,7 +28,7 @@
 #    include <stdint.h>
 #    include <string.h>
 #    include <stdlib.h>
-#    ifdef MSDOS
+#    if defined(__DOS__) || defined(__PMODEW__)
 #        include <dos.h>
 #        include <i86.h>
 #    endif
@@ -101,7 +101,7 @@ static const char *bridge_flags[] = {
 };
 
 static int   term_width;
-#if defined(MSDOS)
+#if defined(__DOS__) || defined(__PMODEW__)
 static union REGS   regs;
 static struct SREGS seg_regs;
 #    pragma pack(push, 1)
@@ -151,7 +151,7 @@ static struct PACKED {
 } *pciids_progif = NULL;
 static char *pciids_string = NULL;
 
-#if defined(MSDOS)
+#if defined(__DOS__) || defined(__PMODEW__)
 typedef struct {
     uint8_t bus, dev;
     struct {
@@ -1083,7 +1083,7 @@ dump_info(uint8_t bus, uint8_t dev, uint8_t func)
     return 0;
 }
 
-#if defined(MSDOS)
+#if defined(__DOS__) || defined(__PMODEW__)
 static int
 comp_irq_routing_entry(const void *elem1, const void *elem2)
 {
@@ -1564,7 +1564,7 @@ main(int argc, char **argv)
 usage:
         printf("%s -s [-d]\n", ch);
         printf("∟ Display all devices on the PCI bus. Specify -d to dump registers as well.\n");
-#if defined(MSDOS)
+#if defined(__DOS__) || defined(__PMODEW__)
         printf("\n");
         printf("%s -t [-m] [-8]\n", ch);
         printf("∟ Display BIOS IRQ steering table. Specify -m to look for a Microsoft $PIR\n");
@@ -1615,7 +1615,7 @@ usage:
         else
             return scan_buses('\0');
     }
-#if defined(MSDOS)
+#if defined(__DOS__) || defined(__PMODEW__)
     else if (argv[1][1] == 't') {
         /* Steering table display asks for optional parameters. */
         reg = 0;

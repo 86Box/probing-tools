@@ -6,7 +6,7 @@ jobs:
   make:
     name: Make
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     env:
       WATCOM: /opt/watcom
@@ -130,7 +130,7 @@ jobs:
   merge:
     name: Artifacts
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [make, newbasic]
 
     steps:

@@ -59,7 +59,7 @@ uint32_t inl(uint16_t port);
                           "in ax, dx" /* in eax, dx */                  \
                           "mov cx, ax"                                  \
                           "db 0x66, 0xc1, 0xe8, 0x10" /* shr eax, 16 */ \
-                          "xchg ax, cx"
+                          "xchg ax, cx"                                 \
                           parm[dx] value[ax cx];
 void     outl(uint16_t port, uint32_t data);
 #        pragma aux outl = "xchg ax, cx"                                 \

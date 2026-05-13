@@ -53,20 +53,21 @@ void outl(uint16_t port, uint32_t data);
 #    else
 /* Some manual prefixing trickery to perform 32-bit I/O and access
    the extended part of EAX in real mode. Exchanging is necessary
-   due to Watcom ignoring the order registers are specified in... */
+   due to Watcom ignoring the order registers are specified in. */
 uint32_t inl(uint16_t port);
 #        pragma aux inl = "db 0x66"                                     \
                           "in ax, dx"                 /* in eax, dx */  \
                           "mov cx, ax"                                  \
                           "db 0x66, 0xc1, 0xe8, 0x10" /* shr eax, 16 */ \
-                          "xchg ax, cx" parm[dx] value[ax cx];
+                          "xchg ax, cx"
+                          parm[dx] value[ax cx];
 void     outl(uint16_t port, uint32_t data);
-#        pragma aux                                       outl = "xchg ax, cx"                                 \
-                                                                 "db 0x66, 0xc1, 0xe0, 0x10" /* shl eax, 16 */ \
-                           "mov ax, cx"                                                                        \
-                           "db 0x66"                                                                           \
-                           "out dx, ax" /* out dx, eax */                                                      \
-            parm[dx][ax cx] modify[ax cx];
+#        pragma aux outl = "xchg ax, cx"                                 \
+                           "db 0x66, 0xc1, 0xe0, 0x10" /* shl eax, 16 */ \
+                           "mov ax, cx"                                  \
+                           "db 0x66"                                     \
+                           "out dx, ax" /* out dx, eax */                \
+                           parm[dx][ax cx] modify[ax cx];
 #    endif
 #else
 #    if defined(__GNUC__) && !defined(__POSIX_UEFI__) && !defined(_WIN32)

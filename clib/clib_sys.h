@@ -56,7 +56,7 @@ void outl(uint16_t port, uint32_t data);
    due to Watcom ignoring the order registers are specified in. */
 uint32_t inl(uint16_t port);
 #        pragma aux inl = "db 0x66"                                     \
-                          "in ax, dx"                 /* in eax, dx */  \
+                          "in ax, dx" /* in eax, dx */                  \
                           "mov cx, ax"                                  \
                           "db 0x66, 0xc1, 0xe8, 0x10" /* shr eax, 16 */ \
                           "xchg ax, cx"
